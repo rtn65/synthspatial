@@ -1,5 +1,8 @@
 {
-  "name": "Synth&Spatial Understanding ",
-  "description": "Unlock Gemini's vision! Detect objects in images or screenshares with interactive 2D/3D bounding boxes and points.",
-  "requestFramePermissions": []
+  "name": "SynthEngine Pro",
+  "description": "Advanced Synthetic Image and Video Generation with Gemini Live Voice Control.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
 }

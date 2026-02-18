@@ -1,96 +1,85 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
 /* tslint:disable */
-// Copyright 2024 Google LLC
-
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-
-//     https://www.apache.org/licenses/LICENSE-2.0
-
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-import {useSetAtom} from 'jotai';
+import {useAtom, useSetAtom} from 'jotai';
+import {useRef} from 'react';
+import type {PointerEvent, RefObject} from 'react';
 import {
-  BoundingBoxes2DAtom,
-  BoundingBoxes3DAtom,
-  BoundingBoxMasksAtom,
+  BrushOpacityAtom,
+  BrushShapeAtom,
+  BrushSizeAtom,
   BumpSessionAtom,
   GalleryImagesAtom,
   GeneratedImageSrcAtom,
+  GeneratedImageKeyAtom,
+  SecondaryGeneratedImageSrcAtom,
+  SecondaryGeneratedImageKeyAtom,
+  SecondaryQualityMetadataAtom,
   HistoryAtom,
   ImageSentAtom,
+  IsDrawingROIAtom,
   PointsAtom,
+  ROIActiveShapeAtom,
+  ROIAtom,
+  ROICursorPosAtom,
+  ROISelectedIdAtom,
 } from './atoms';
 import {
   addGalleryImage,
+  addGalleryMetadata,
   addHistoryImage,
   addHistoryResult,
-  clearGalleryStore,
-  clearHistoryImagesStore,
-  clearHistoryResultsStore,
+  clearGalleryForProject,
+  clearGalleryMetadataForProject,
   deleteGalleryImage,
+  deleteGalleryMetadata,
   deleteHistoryImage,
   deleteHistoryResult,
 } from './db';
-import {HistoryItem, HistoryResult} from './Types';
+// Added ROI to imports from Types to fix 'Cannot find name ROI' error.
+import {GalleryImageMetadata, HistoryItem, HistoryResult, ROIPolygon, ROIShape, ROIBrush, ROICircle, ROIRectangle, ROIFreehand, ROI} from './Types';
 import {dataURLtoBlob} from './utils';
 
 export function useResetState() {
-  // fix: Use useSetAtom to get a stable setter function and avoid type inference issues.
   const setImageSent = useSetAtom(ImageSentAtom);
-  const setBoundingBoxes2D = useSetAtom(BoundingBoxes2DAtom);
-  const setBoundingBoxes3D = useSetAtom(BoundingBoxes3DAtom);
-  const setBoundingBoxMasks = useSetAtom(BoundingBoxMasksAtom);
-  const setPoints = useSetAtom(PointsAtom);
   const setBumpSession = useSetAtom(BumpSessionAtom);
   const setGeneratedImageSrc = useSetAtom(GeneratedImageSrcAtom);
+  const setGeneratedImageKey = useSetAtom(GeneratedImageKeyAtom);
+  const setSecondaryGeneratedImageSrc = useSetAtom(SecondaryGeneratedImageSrcAtom);
+  const setSecondaryGeneratedImageKey = useSetAtom(SecondaryGeneratedImageKeyAtom);
+  const setSecondaryQualityMetadata = useSetAtom(SecondaryQualityMetadataAtom);
+  const setRoi = useSetAtom(ROIAtom);
+  const setIsDrawingRoi = useSetAtom(IsDrawingROIAtom);
+  const setROIActiveShape = useSetAtom(ROIActiveShapeAtom);
+  const setROICursorPos = useSetAtom(ROICursorPosAtom);
+  const setROISelectedId = useSetAtom(ROISelectedIdAtom);
 
   return () => {
     setImageSent(false);
-    setBoundingBoxes2D([]);
-    setBoundingBoxes3D([]);
-    setBoundingBoxMasks([]);
     setBumpSession((prev) => prev + 1);
-    setPoints([]);
     setGeneratedImageSrc(null);
+    setGeneratedImageKey(null);
+    setSecondaryGeneratedImageSrc(null);
+    setSecondaryGeneratedImageKey(null);
+    setSecondaryQualityMetadata(null);
+    setRoi([]);
+    setIsDrawingRoi(false);
+    setROIActiveShape(null);
+    setROICursorPos(null);
+    setROISelectedId(null);
   };
 }
-
-const HISTORY_KEY = 'detection-history'; // Will now store metadata only
-const MAX_HISTORY_ITEMS = 30;
-
-type AddHistoryItemArgs = Omit<
-  HistoryItem,
-  'id' | 'timestamp' | 'imageSrc' | 'thumbnail' | 'resultThumbnail'
-> & {
-  imageSrc: string; // dataURL
-  thumbnail: string; // dataURL
-  resultThumbnail?: string; // dataURL
-  result?: HistoryResult;
-};
 
 export function useManageHistory() {
   const setHistory = useSetAtom(HistoryAtom);
 
-  const addHistoryItem = async (itemArgs: AddHistoryItemArgs) => {
+  const addHistoryItem = async (itemArgs: any) => {
     const id = Date.now();
-    const {
-      imageSrc,
-      thumbnail,
-      resultThumbnail,
-      result,
-      ...metadata
-    } = itemArgs;
+    const { imageSrc, thumbnail, resultThumbnail, result, ...metadata } = itemArgs;
 
-    // Store images in IndexedDB
     const imageBlob = dataURLtoBlob(imageSrc);
     await addHistoryImage(id, imageBlob);
 
@@ -117,57 +106,180 @@ export function useManageHistory() {
       await addHistoryResult(id, result);
     }
 
-    setHistory((prev) => {
-      const updatedHistory = [newItem, ...prev];
-      if (updatedHistory.length > MAX_HISTORY_ITEMS) {
-        const itemToRemove = updatedHistory.pop()!;
-        // Clean up DB entries for the removed item
-        deleteHistoryImage(itemToRemove.imageSrc);
-        deleteHistoryImage(itemToRemove.thumbnail);
-        if (itemToRemove.resultThumbnail) {
-          deleteHistoryImage(itemToRemove.resultThumbnail);
-        }
-        deleteHistoryResult(itemToRemove.id);
-      }
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedHistory));
-      return updatedHistory;
-    });
+    const historyKey = `history-${newItem.projectId}`;
+    const storedHistory = localStorage.getItem(historyKey);
+    const currentHistory = storedHistory ? JSON.parse(storedHistory) : [];
+
+    const updatedHistory = [newItem, ...currentHistory].slice(0, 30);
+    localStorage.setItem(historyKey, JSON.stringify(updatedHistory));
+    setHistory(updatedHistory);
   };
 
-  const clearHistory = async () => {
-    localStorage.removeItem(HISTORY_KEY);
-    await clearHistoryImagesStore();
-    await clearHistoryResultsStore();
+  const clearHistory = async (projectId: number) => {
+    const historyKey = `history-${projectId}`;
+    localStorage.removeItem(historyKey);
     setHistory([]);
   };
 
   return {addHistoryItem, clearHistory};
 }
 
-const MAX_GALLERY_ITEMS = 50;
-
 export function useManageGallery() {
   const setGalleryKeys = useSetAtom(GalleryImagesAtom);
 
-  const addGalleryItem = async (imageDataUrl: string) => {
+  const addGalleryItem = async (
+    imageDataUrl: string,
+    projectId: number,
+    metadata?: GalleryImageMetadata,
+    originalDataUrl?: string,
+  ): Promise<number> => {
     const key = Date.now();
     const blob = dataURLtoBlob(imageDataUrl);
-    await addGalleryImage(key, blob);
+    
+    let originalBlob: Blob | undefined;
+    if (originalDataUrl) {
+      originalBlob = dataURLtoBlob(originalDataUrl);
+    }
 
-    setGalleryKeys((prev) => {
-      const updatedKeys = [key, ...prev];
-      if (updatedKeys.length > MAX_GALLERY_ITEMS) {
-        const keyToRemove = updatedKeys.pop()!;
-        deleteGalleryImage(keyToRemove);
-      }
-      return updatedKeys;
-    });
+    await addGalleryImage(key, blob, projectId, originalBlob);
+    if (metadata) await addGalleryMetadata(key, metadata);
+
+    setGalleryKeys((prev) => [key, ...prev].slice(0, 50));
+    return key;
   };
 
-  const clearGallery = async () => {
-    await clearGalleryStore();
+  const deleteGalleryItems = async (keysToDelete: number[]) => {
+    for (const key of keysToDelete) {
+      await deleteGalleryImage(key);
+      await deleteGalleryMetadata(key);
+    }
+    setGalleryKeys((prev) => prev.filter((key) => !keysToDelete.includes(key)));
+  };
+
+  const clearGallery = async (projectId: number) => {
+    await clearGalleryForProject(projectId);
+    await clearGalleryMetadataForProject(projectId);
     setGalleryKeys([]);
   };
 
-  return {addGalleryItem, clearGallery};
+  return {addGalleryItem, clearGallery, deleteGalleryItems};
+}
+
+export function useROIDrawing(
+  drawingContainerRef: RefObject<HTMLDivElement | null>,
+  scaledDims: {width: number; height: number},
+) {
+  const [rois, setRois] = useAtom(ROIAtom);
+  const [isDrawing, setIsDrawing] = useAtom(IsDrawingROIAtom);
+  const [activeTool] = useAtom(ROIActiveShapeAtom);
+  const [selectedId, setSelectedId] = useAtom(ROISelectedIdAtom);
+  const [brushSize] = useAtom(BrushSizeAtom);
+  const [brushOpacity] = useAtom(BrushOpacityAtom);
+  const [brushShape] = useAtom(BrushShapeAtom);
+  const setROICursorPos = useSetAtom(ROICursorPosAtom);
+
+  const activeId = useRef<string | null>(null);
+  const startPoint = useRef<{x: number; y: number} | null>(null);
+
+  const getPos = (e: PointerEvent) => {
+    if (!drawingContainerRef.current) return null;
+    const rect = drawingContainerRef.current.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    return { x, y };
+  };
+
+  const handlePointerDown = (e: PointerEvent) => {
+    if (!activeTool || activeTool === 'pan') return;
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+
+    const pos = getPos(e);
+    if (!pos) return;
+
+    if (activeTool === 'select') {
+      const found = [...rois].reverse().find(roi => {
+        if (roi.type === 'rectangle') return pos.x >= roi.x && pos.x <= roi.x + roi.width && pos.y >= roi.y && pos.y <= roi.y + roi.height;
+        if (roi.type === 'circle') {
+          const dist = Math.sqrt(Math.pow(pos.x - roi.x, 2) + Math.pow(pos.y - roi.y, 2));
+          return dist <= roi.radius;
+        }
+        return false;
+      });
+      setSelectedId(found ? found.id : null);
+      return;
+    }
+
+    setIsDrawing(true);
+    const id = Date.now().toString();
+    activeId.current = id;
+    startPoint.current = pos;
+
+    const common = { id, isSelected: true };
+    
+    let newShape: ROIShape;
+    switch(activeTool) {
+      case 'rectangle':
+        newShape = { ...common, type: 'rectangle', x: pos.x, y: pos.y, width: 0, height: 0 } as ROIRectangle;
+        break;
+      case 'circle':
+        newShape = { ...common, type: 'circle', x: pos.x, y: pos.y, radius: 0 } as ROICircle;
+        break;
+      case 'brush':
+        newShape = { ...common, type: 'brush', points: [pos], strokeWidth: brushSize / scaledDims.width, opacity: brushOpacity, brushShape } as ROIBrush;
+        break;
+      case 'freehand':
+        newShape = { ...common, type: 'freehand', points: [pos] } as ROIFreehand;
+        break;
+      case 'polygon':
+        newShape = { ...common, type: 'polygon', points: [pos], isFinished: false } as ROIPolygon;
+        break;
+      default: return;
+    }
+    
+    setRois(prev => [...prev, newShape]);
+    setSelectedId(id);
+  };
+
+  const handlePointerMove = (e: PointerEvent) => {
+    const pos = getPos(e);
+    if (!pos) return;
+    setROICursorPos(pos);
+    
+    if (!isDrawing || !activeId.current || !startPoint.current) return;
+
+    setRois(prev => prev.map(roi => {
+      if (roi.id !== activeId.current) return roi;
+      
+      switch(roi.type) {
+        case 'rectangle':
+          return {
+            ...roi,
+            x: Math.min(pos.x, startPoint.current!.x),
+            y: Math.min(pos.y, startPoint.current!.y),
+            width: Math.abs(pos.x - startPoint.current!.x),
+            height: Math.abs(pos.y - startPoint.current!.y)
+          };
+        case 'circle':
+          const radius = Math.sqrt(Math.pow(pos.x - startPoint.current!.x, 2) + Math.pow(pos.y - startPoint.current!.y, 2));
+          return { ...roi, radius };
+        case 'brush':
+        case 'freehand':
+        case 'polygon':
+          return { ...roi, points: [...roi.points, pos] };
+        default: return roi;
+      }
+    }) as ROI);
+  };
+
+  const handlePointerUp = (e: PointerEvent) => {
+    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    setIsDrawing(false);
+    activeId.current = null;
+    startPoint.current = null;
+  };
+
+  const handlePointerLeave = () => setROICursorPos(null);
+
+  return { handlePointerDown, handlePointerMove, handlePointerUp, handlePointerLeave };
 }

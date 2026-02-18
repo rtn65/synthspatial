@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -20,14 +21,16 @@
 import {useAtom, useSetAtom} from 'jotai';
 import {useEffect, useState} from 'react';
 import {
-  HistoryAtom,
+  ActiveProjectHistoryAtom,
+  ActiveProjectIdAtom,
   HistoryItemToLoadAtom,
   IsHistoryPanelOpenAtom,
+  ProjectsAtom,
 } from './atoms';
 import {getHistoryImage} from './db';
 import {useManageHistory} from './hooks';
 import {HistoryItem} from './Types';
-import {exportToCoco} from './utils';
+import {exportToCoco, exportToYolo} from './utils';
 
 function Thumbnail({imageId}: {imageId: number}) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -61,28 +64,39 @@ function Thumbnail({imageId}: {imageId: number}) {
 
 export function HistoryPanel() {
   const [isOpen, setIsOpen] = useAtom(IsHistoryPanelOpenAtom);
-  const [history] = useAtom(HistoryAtom);
+  const [history] = useAtom(ActiveProjectHistoryAtom);
   const {clearHistory} = useManageHistory();
   const setItemToLoad = useSetAtom(HistoryItemToLoadAtom);
+  const [activeProjectId] = useAtom(ActiveProjectIdAtom);
+  const [projects] = useAtom(ProjectsAtom);
 
   if (!isOpen) return null;
+
+  const activeProject = projects.find((p) => p.id === activeProjectId);
+  const projectName = activeProject
+    ? activeProject.name.replace(/\s+/g, '_')
+    : 'export';
 
   function handleLoadItem(item: HistoryItem) {
     setItemToLoad(item);
   }
 
-  function handleExport() {
-    exportToCoco(history);
+  function handleExportCoco() {
+    exportToCoco(history, `${projectName}.coco.json`);
   }
 
-  const has2dDetections = history.some(
-    (item) => item.detectType === '2D bounding boxes',
+  function handleExportYolo() {
+    exportToYolo(history, `${projectName}.yolo.zip`);
+  }
+
+  const hasCurated2dDetections = history.some(
+    (item) => item.isCurated && item.detectType === '2D bounding boxes',
   );
 
   return (
     <div className={`history-panel ${isOpen ? 'open' : ''}`}>
       <div className="flex items-center justify-between p-4 border-b">
-        <h2 className="text-lg font-bold">Detection History</h2>
+        <h2 className="text-lg font-bold">Prompt History</h2>
         <button onClick={() => setIsOpen(false)} className="secondary !px-3">
           &times;
         </button>
@@ -90,7 +104,7 @@ export function HistoryPanel() {
       <div className="flex-grow overflow-y-auto p-4">
         {history.length === 0 ? (
           <p className="text-center text-[var(--text-color-secondary)]">
-            No history yet. Run a detection task to see it here.
+            No history yet. Run a prompt to see it here.
           </p>
         ) : (
           <ul className="space-y-4">
@@ -129,16 +143,22 @@ export function HistoryPanel() {
       </div>
       <div className="p-4 border-t space-y-2">
         <button
-          onClick={handleExport}
-          disabled={!has2dDetections}
+          onClick={handleExportCoco}
+          disabled={!hasCurated2dDetections}
           className="w-full secondary disabled:opacity-50 disabled:cursor-not-allowed">
-          Export to COCO (2D Boxes)
+          Export Curated to COCO
         </button>
         <button
-          onClick={() => clearHistory()}
-          disabled={history.length === 0}
+          onClick={handleExportYolo}
+          disabled={!hasCurated2dDetections}
           className="w-full secondary disabled:opacity-50 disabled:cursor-not-allowed">
-          Clear All History
+          Export Curated to YOLO
+        </button>
+        <button
+          onClick={() => activeProjectId && clearHistory(activeProjectId)}
+          disabled={history.length === 0 || !activeProjectId}
+          className="w-full secondary disabled:opacity-50 disabled:cursor-not-allowed">
+          Clear Project History
         </button>
       </div>
     </div>

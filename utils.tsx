@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -17,7 +18,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import {getAllHistoryResults} from './db';
+import JSZip from 'jszip';
+import {getAllHistoryResults, getHistoryImage} from './db';
 import {BoundingBox2DType, HistoryItem, HistoryResult} from './Types';
 
 export function getSvgPathFromStroke(stroke: number[][]) {
@@ -96,7 +98,7 @@ export function dataURLtoBlob(dataurl: string): Blob {
   return new Blob([u8arr], {type: mime});
 }
 
-export async function exportToCoco(history: HistoryItem[]) {
+export async function exportToCoco(history: HistoryItem[], filename: string) {
   const coco: {
     info: any;
     licenses: any[];
@@ -120,6 +122,15 @@ export async function exportToCoco(history: HistoryItem[]) {
   let annotationId = 1;
   const imageMap = new Map<number, number>();
 
+  const curatedItems = history.filter(
+    (item) => item.isCurated && (item.detectType as string) === '2D bounding boxes',
+  );
+
+  if (curatedItems.length === 0) {
+    alert('No curated 2D bounding box detections to export.');
+    return;
+  }
+
   const allResults = await getAllHistoryResults();
   const resultsMap = new Map<number, HistoryResult>();
   allResults.forEach((res, key) => {
@@ -128,9 +139,7 @@ export async function exportToCoco(history: HistoryItem[]) {
     }
   });
 
-  for (const item of history) {
-    if (item.detectType !== '2D bounding boxes') continue;
-
+  for (const item of curatedItems) {
     if (!imageMap.has(item.imageSrc)) {
       const imageId = coco.images.length + 1;
       imageMap.set(item.imageSrc, imageId);
@@ -145,9 +154,10 @@ export async function exportToCoco(history: HistoryItem[]) {
     }
 
     const imageId = imageMap.get(item.imageSrc)!;
-    const result = resultsMap.get(item.id) as BoundingBox2DType[] | undefined;
+    // Cast result safely to BoundingBox2DType[]
+    const result = resultsMap.get(item.id) as unknown as BoundingBox2DType[] | undefined;
 
-    if (result) {
+    if (result && Array.isArray(result)) {
       for (const box of result) {
         if (!categoryMap.has(box.label)) {
           const categoryId = coco.categories.length + 1;
@@ -185,7 +195,117 @@ export async function exportToCoco(history: HistoryItem[]) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'dataset.coco.json';
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+export async function exportToYolo(history: HistoryItem[], filename: string) {
+  const zip = new JSZip();
+  const imagesFolder = zip.folder('images');
+  const labelsFolder = zip.folder('labels');
+
+  if (!imagesFolder || !labelsFolder) return;
+
+  const categoryMap = new Map<string, number>();
+  let nextCategoryId = 0;
+  const imageMap = new Map<number, number>(); // Map imageSrc (db key) to a simple index
+  let nextImageIndex = 0;
+
+  const curatedItems = history.filter(
+    (item) => item.isCurated && (item.detectType as string) === '2D bounding boxes',
+  );
+
+  if (curatedItems.length === 0) {
+    alert('No curated 2D bounding box detections to export.');
+    return;
+  }
+
+  const allResults = await getAllHistoryResults();
+  const resultsMap = new Map<number, HistoryResult>();
+  allResults.forEach((res, key) => {
+    if (res) {
+      resultsMap.set(key, res);
+    }
+  });
+
+  // First pass to build category map
+  for (const item of curatedItems) {
+    // Cast result safely to BoundingBox2DType[]
+    const result = resultsMap.get(item.id) as unknown as BoundingBox2DType[] | undefined;
+    if (result && Array.isArray(result)) {
+      for (const box of result) {
+        if (!categoryMap.has(box.label)) {
+          categoryMap.set(box.label, nextCategoryId++);
+        }
+      }
+    }
+  }
+
+  // Second pass to create files
+  for (const item of curatedItems) {
+    // Cast result safely to BoundingBox2DType[]
+    const result = resultsMap.get(item.id) as unknown as BoundingBox2DType[] | undefined;
+    if (!result || !Array.isArray(result)) continue;
+
+    let imageIndex: number;
+    if (imageMap.has(item.imageSrc)) {
+      imageIndex = imageMap.get(item.imageSrc)!;
+    } else {
+      imageIndex = nextImageIndex++;
+      imageMap.set(item.imageSrc, imageIndex);
+
+      // Add image to zip
+      const imageBlob = await getHistoryImage(item.imageSrc);
+      if (imageBlob) {
+        // Use a consistent extension.
+        imagesFolder.file(`img_${imageIndex}.jpg`, imageBlob);
+      }
+    }
+
+    // Create label file content
+    const yoloStrings = result
+      .map((box) => {
+        const categoryId = categoryMap.get(box.label);
+        if (categoryId === undefined) return '';
+
+        const x_center = box.x + box.width / 2;
+        const y_center = box.y + box.height / 2;
+
+        return `${categoryId} ${x_center} ${y_center} ${box.width} ${box.height}`;
+      })
+      .filter((s) => s)
+      .join('\n');
+
+    // Add label file to zip, appending if it already exists for this image
+    const labelFileName = `img_${imageIndex}.txt`;
+    const existingContent = await labelsFolder
+      .file(labelFileName)
+      ?.async('string');
+    const newContent = existingContent
+      ? `${existingContent}\n${yoloStrings}`
+      : yoloStrings;
+    labelsFolder.file(labelFileName, newContent);
+  }
+
+  // Create data.yaml
+  const yamlContent = `
+train: ../images
+val: ../images
+
+nc: ${categoryMap.size}
+names: [${Array.from(categoryMap.keys()).map((name) => `'${name}'`).join(', ')}]
+  `;
+  zip.file('data.yaml', yamlContent.trim());
+
+  // Trigger download
+  const content = await zip.generateAsync({type: 'blob'});
+  const url = URL.createObjectURL(content);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

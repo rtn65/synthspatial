@@ -1,80 +1,100 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
 /* tslint:disable */
-// Copyright 2024 Google LLC
 
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-
-//     https://www.apache.org/licenses/LICENSE-2.0
-
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-import {PointingType} from './atoms';
-
+/**
+ * Supported detection and generation task types.
+ */
 export type DetectTypes =
+  | 'Synthetic Generation'
   | '2D bounding boxes'
   | 'Segmentation masks'
-  | '3D bounding boxes'
   | 'Points'
-  | 'Image Editing';
+  | '3D bounding boxes';
 
 export type Theme = 'light' | 'dark' | 'system';
 
-export type BoundingBox2DType = {
+export type GalleryImageMetadata = {
+  projectId: number;
+  qualityScore: number;
+  qualityFeedback: string;
+  improvementSuggestion?: string;
+  userRating?: 'up' | 'down' | null;
+  userComment?: string;
+};
+
+// Region of Interest Types
+export type ROIRectangle = {
+  id: string;
+  type: 'rectangle';
   x: number;
   y: number;
   width: number;
   height: number;
-  label: string;
+};
+export type ROIPolygon = {
+  id: string;
+  type: 'polygon';
+  points: Array<{x: number; y: number}>;
+  isFinished: boolean;
+};
+export type ROICircle = {
+  id: string;
+  type: 'circle';
+  x: number; // center x
+  y: number; // center y
+  radius: number;
+};
+export type ROIFreehand = {
+  id: string;
+  type: 'freehand';
+  points: Array<{x: number; y: number}>;
+};
+export type ROIBrush = {
+  id: string;
+  type: 'brush';
+  points: Array<{x: number; y: number}>;
+  strokeWidth: number;
+  opacity: number;
+  brushShape: 'round' | 'square';
 };
 
-export type BoundingBoxMaskType = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  label: string;
-  imageData: string;
-};
+export type ROIShape = ROIRectangle | ROIPolygon | ROICircle | ROIFreehand | ROIBrush;
+export type ROI = ROIShape[];
 
-export type BoundingBox3DType = {
-  center: [number, number, number];
-  size: [number, number, number];
-  rpy: [number, number, number];
-  label: string;
+// Project Types
+export type Project = {
+  id: number;
+  name: string;
 };
 
 // History Types
 export type PromptState = {
-  // For 2D
-  targetPrompt?: string;
-  labelPrompt?: string;
-  // For Segmentation
-  itemsPrompt?: string;
-  segmentationLanguage?: string;
-  // For Image Editing
   editPrompt?: string;
-  // For others (Points, 3D)
-  genericItemsPrompt?: string;
 };
 
-export type HistoryResult =
-  | BoundingBox2DType[]
-  | BoundingBox3DType[]
-  | BoundingBoxMaskType[]
-  | PointingType[]
-  | string; // for generated image src
+/**
+ * Interface for 2D bounding box results.
+ */
+export interface BoundingBox2DType {
+  label: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * The result of a history item can be a generated image URL or a set of bounding boxes.
+ */
+export type HistoryResult = string | BoundingBox2DType[];
 
 export type HistoryItem = {
   id: number;
+  projectId: number;
   timestamp: number;
   imageSrc: number; // Key to IndexedDB blob
   imageWidth: number;

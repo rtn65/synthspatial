@@ -1,21 +1,11 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
 /* tslint:disable */
-// Copyright 2024 Google LLC
-
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-
-//     https://www.apache.org/licenses/LICENSE-2.0
-
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+import {DetectTypes} from './Types';
+import {SectorType} from './atoms';
 
 export const colors = [
   'rgb(0, 0, 0)',
@@ -28,28 +18,6 @@ export const colors = [
   'rgb(161, 66, 244)',
 ];
 
-function hexToRgb(hex: string) {
-  const r = parseInt(hex.substring(1, 3), 16);
-  const g = parseInt(hex.substring(3, 5), 16);
-  const b = parseInt(hex.substring(5, 7), 16);
-  return [r, g, b];
-}
-
-export const segmentationColors = [
-  '#E6194B',
-  '#3C89D0',
-  '#3CB44B',
-  '#FFE119',
-  '#911EB4',
-  '#42D4F4',
-  '#F58231',
-  '#F032E6',
-  '#BFEF45',
-  '#469990',
-];
-export const segmentationColorsRgb = segmentationColors.map((c) => hexToRgb(c));
-
-// FIX: Removed top-level await to prevent module from becoming asynchronous, which caused issues with Jotai atoms.
 export const imageOptions: Promise<string[]> = Promise.all(
   [
     'origami.jpg',
@@ -72,34 +40,10 @@ export const imageOptions: Promise<string[]> = Promise.all(
   ),
 );
 
-export const datasetImageOptions: Promise<string[]> = Promise.all(
-  [
-    'origami.jpg',
-    'pumpkins.jpg',
-    'clock.jpg',
-    'socks.jpg',
-    'breakfast.jpg',
-    'cat.jpg',
-    'spill.jpg',
-    'fruit.jpg',
-    'baklava.jpg',
-    'airport.jpg',
-    'books.jpg',
-    'cars.jpg',
-    'city.jpg',
-    'dogs.jpg',
-    'kitchen.jpg',
-    'lemons.jpg',
-  ].map(async (i) =>
-    URL.createObjectURL(
-      await (
-        await fetch(
-          `https://www.gstatic.com/aistudio/starter-apps/bounding-box/${i}`,
-        )
-      ).blob(),
-    ),
-  ),
-);
+/**
+ * Dataset options used in the DatasetPanel.
+ */
+export const datasetImageOptions = imageOptions;
 
 export const lineOptions = {
   size: 8,
@@ -109,42 +53,58 @@ export const lineOptions = {
   simulatePressure: false,
 };
 
-export const defaultPromptParts = {
-  '2D bounding boxes': [
-    'Show me the positions of',
-    'items',
-    'as a JSON list. Do not return masks. Limit to 25 items.',
-  ],
-  'Segmentation masks': [
-    `Give the segmentation masks for`,
-    'all objects',
-    `. Output a JSON list of segmentation masks where each entry contains the 2D bounding box in the key "box_2d", the segmentation mask in key "mask", and the text label in the key "label". Use descriptive labels.`,
-  ],
-  '3D bounding boxes': [
-    'Output in json. Detect the 3D bounding boxes of ',
-    'items',
-    ', output no more than 10 items. Return a list where each entry contains the object name in "label" and its 3D bounding box in "box_3d".',
-  ],
-  Points: [
-    'Point to the',
-    'items',
-    ' with no more than 10 items. The answer should follow the json format: [{"point": <point>, "label": <label1>}, ...]. The points are in [y, x] format normalized to 0-1000.',
-  ],
-};
+export interface BackgroundPreset {
+  id: string;
+  label: string;
+  prompt: string;
+  system: string;
+}
 
-export const defaultPrompts = {
-  '2D bounding boxes': defaultPromptParts['2D bounding boxes'].join(' '),
-  '3D bounding boxes': defaultPromptParts['3D bounding boxes'].join(' '),
-  'Segmentation masks': defaultPromptParts['Segmentation masks'].join(''),
-  Points: defaultPromptParts.Points.join(' '),
-};
+export const BG_PRESETS: BackgroundPreset[] = [
+  { 
+    id: 'üretim', 
+    label: '🏭 Akıllı Üretim', 
+    prompt: 'Görüntüdeki nesneyi ultra modern, teknolojik bir akıllı fabrikada bir robotik kol tarafından taşınırken göster. Arka planda hareketli montaj hatları.',
+    system: 'You are an industrial design visualization engine. Focus on high-precision metallic surfaces, volumetric factory lighting, and photorealistic material science.'
+  },
+  { 
+    id: 'termal', 
+    label: '🌡️ Gelişmiş Termal', 
+    prompt: 'Profesyonel FLIR termal kamera simülasyonu. Sıcaklık gradyanları için spektral renk paleti. Isı sızıntıları üzerinde dinamik yansımalar.',
+    system: 'You are a scientific thermal imaging sensor (FLIR). Map all textures to accurate heat-signature spectral gradients (lava/ironbow). Ensure no photographic light exists, only infrared radiation data visualization.'
+  },
+  { 
+    id: 'pcb', 
+    label: '🔌 Mikro Laboratuvar', 
+    prompt: 'Nesneyi devasa bir elektronik devre kartının (PCB) üzerinde, bir mikroçip gibi konumlandır. Çevrede devasa kapasitörler ve parlayan bakır yollar.',
+    system: 'You are a high-end macro photography microscope. Render with extreme shallow depth of field (f/1.8), micron-level semiconductor textures, and realistic subsurface scattering on silicon components.'
+  },
+  { 
+    id: 'uydu', 
+    label: '🛰️ Jeo-Uzamsal', 
+    prompt: 'Dünya yörüngesinden 10cm çözünürlüklü uydu görüntüsü stili. Arazi üzerinde multispektral analiz katmanları ve NDVI renk paleti.',
+    system: 'You are a multi-spectral orbital satellite sensor. Maintain absolute nadir perspective (top-down), render orthorectified terrain, and apply geospatial analysis color overlays with high cartographic fidelity.'
+  },
+  { 
+    id: 'güvenlik', 
+    label: '🛡️ Gece Görüşü 2.0', 
+    prompt: 'Military-grade gen-3 gece görüş sistemi (NVG). Fosfor yeşili tonları, dijital gürültü ve taktiksel veri arayüzü (HUD) katmanları.',
+    system: 'You are a Gen-3 tactical night vision optics system. Simulate realistic sensor noise, light bloom on bright spots, phosphor grain, and digital overlay artifacts characteristic of advanced NVG systems.'
+  },
+  { 
+    id: 'radyoloji', 
+    label: '🦴 MRI/BT Kesiti', 
+    prompt: 'Yüksek çözünürlüklü tıbbi görüntüleme; MRI ve BT taraması karışımı. Nesnenin içsel yapısını gösteren katmanlı kesitler.',
+    system: 'You are a clinical 3D medical visualization workstation. Render translucent volumetric density structures, high-contrast radiological cross-sections, and bio-organic textures with diagnostic clarity.'
+  },
+];
 
-const safetyLevel = 'only_high';
-
-export const safetySettings = new Map();
-
-safetySettings.set('harassment', safetyLevel);
-safetySettings.set('hate_speech', safetyLevel);
-safetySettings.set('sexually_explicit', safetyLevel);
-safetySettings.set('dangerous_content', safetyLevel);
-safetySettings.set('civic_integrity', safetyLevel);
+export const SECTORS: {id: SectorType; label: string; icon: string; desc: string}[] = [
+  { id: 'general', label: 'Genel', icon: '🎨', desc: 'Standart görüntü üretimi' },
+  { id: 'data_dreamer', label: 'DataDreamer', icon: '💭', desc: 'LLM destekli prompt üretimi' },
+  { id: 'red_team', label: 'Red Team', icon: '🚨', desc: 'Adversarial Saldırı Testleri' },
+  { id: 'agriculture', label: 'Tarım', icon: '🌾', desc: 'Mahsul sağlığı ve analizi' },
+  { id: 'manufacturing', label: 'Üretim', icon: '🏭', desc: 'Kalite kontrol ve hata simülasyonu' },
+  { id: 'security', label: 'Güvenlik', icon: '🛡️', desc: 'Gözetim ve tehdit senaryoları' },
+  { id: 'remote_sensing', label: 'Uydu', icon: '🛰️', desc: 'Jeo-uzamsal haritalama' },
+];

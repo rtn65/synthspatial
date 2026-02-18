@@ -1,122 +1,89 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
 /* tslint:disable */
-// Copyright 2024 Google LLC
-
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-
-//     https://www.apache.org/licenses/LICENSE-2.0
-
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the a specific language governing permissions and
-// limitations under the License.
-
-import {useAtom} from 'jotai';
-import {
-  DetectTypeAtom,
-  HoverEnteredAtom,
-  IsDatasetPanelOpenAtom,
-  IsGalleryPanelOpenAtom,
-  IsHistoryPanelOpenAtom,
-  RevealOnHoverModeAtom,
-  ThemeAtom,
-} from './atoms';
+import {useAtom, useSetAtom} from 'jotai';
+import {ThemeAtom, IsSearchGroundingActiveAtom, SynthesisModelAtom, IsTutorialActiveAtom, TutorialStepAtom, IsInputPanelOpenAtom, IsGuideOpenAtom} from './atoms';
 import {useResetState} from './hooks';
+import {ProjectSelector} from './ProjectSelector';
+import {ModelSelector} from './ModelSelector';
+import {LiveAssistant} from './LiveAssistant';
 
 export function TopBar() {
   const resetState = useResetState();
-  const [revealOnHover, setRevealOnHoverMode] = useAtom(RevealOnHoverModeAtom);
-  const [detectType] = useAtom(DetectTypeAtom);
-  const [, setHoverEntered] = useAtom(HoverEnteredAtom);
-  const [isHistoryOpen, setIsHistoryOpen] = useAtom(IsHistoryPanelOpenAtom);
-  const [isGalleryOpen, setIsGalleryOpen] = useAtom(IsGalleryPanelOpenAtom);
-  const [isDatasetOpen, setIsDatasetOpen] = useAtom(IsDatasetPanelOpenAtom);
   const [theme, setTheme] = useAtom(ThemeAtom);
-  const isDetection =
-    detectType === '2D bounding boxes' || detectType === 'Segmentation masks';
+  const [isSearch, setIsSearch] = useAtom(IsSearchGroundingActiveAtom);
+  const [activeModel] = useAtom(SynthesisModelAtom);
+  const setIsTutorialActive = useSetAtom(IsTutorialActiveAtom);
+  const setTutorialStep = useSetAtom(TutorialStepAtom);
+  const [isInputOpen, setIsInputOpen] = useAtom(IsInputPanelOpenAtom);
+  const setIsGuideOpen = useSetAtom(IsGuideOpenAtom);
 
-  function handleThemeToggle() {
-    if (theme === 'system') {
-      setTheme('light');
-    } else if (theme === 'light') {
-      setTheme('dark');
-    } else {
-      setTheme('system');
-    }
-  }
-
-  function getThemeIcon() {
-    switch (theme) {
-      case 'light':
-        return '☀️'; // Sun for light mode
-      case 'dark':
-        return '🌙'; // Moon for dark mode
-      case 'system':
-      default:
-        return '🖥️'; // Computer for system mode
-    }
-  }
+  const startTutorial = () => {
+    setTutorialStep(0);
+    setIsTutorialActive(true);
+  };
 
   return (
-    <div className="flex w-full items-center px-3 py-2 border-b justify-between">
-      <div className="flex gap-3 items-center">
-        <button
-          onClick={() => {
-            resetState();
-          }}
-          className="!p-0 !border-none underline bg-transparent"
-          style={{
-            minHeight: '0',
-          }}>
-          <div>Reset session</div>
-        </button>
+    <div className="flex w-full items-center px-4 py-2 border-b justify-between shrink-0 bg-[var(--bg-color)] z-[100] shadow-sm">
+      <div className="flex gap-4 items-center">
+        <div className="flex items-center gap-2">
+           <div className="w-8 h-8 bg-[var(--accent-color)] rounded-xl flex items-center justify-center text-white font-black shadow-lg shadow-[var(--accent-color-focus)]">S</div>
+           <div className="font-black text-base tracking-tighter text-[var(--text-color-primary)]">SynthEngine</div>
+        </div>
+        <div className="h-4 w-px bg-[var(--border-color)]" />
+        <ProjectSelector />
+        <button onClick={resetState} className="text-[10px] font-black uppercase text-[var(--text-color-secondary)] hover:text-[var(--accent-color)] transition-colors">Sıfırla</button>
       </div>
-      <div className="flex gap-3 items-center">
-        {isDetection ? (
-          <label className="flex items-center gap-2 px-3 select-none whitespace-nowrap">
-            <input
-              type="checkbox"
-              checked={revealOnHover}
-              onChange={(e) => {
-                if (e.target.checked) {
-                  setHoverEntered(false);
-                }
-                setRevealOnHoverMode(e.target.checked);
-              }}
-            />
-            <span className="hidden sm:block">reveal on hover</span>
-          </label>
-        ) : null}
-        <button
-          onClick={handleThemeToggle}
-          className="secondary !px-3"
-          aria-label={`Toggle theme (current: ${theme})`}>
-          {getThemeIcon()}
-        </button>
-        <button
-          onClick={() => setIsDatasetOpen(!isDatasetOpen)}
-          className="secondary !px-3"
-          aria-label="Toggle dataset gallery panel">
-          📚
-        </button>
-        <button
-          onClick={() => setIsGalleryOpen(!isGalleryOpen)}
-          className="secondary !px-3"
-          aria-label="Toggle gallery panel">
-          🖼️
-        </button>
-        <button
-          onClick={() => setIsHistoryOpen(!isHistoryOpen)}
-          className="secondary !px-3"
-          aria-label="Toggle history panel">
-          🕒
-        </button>
+      
+      <div className="flex gap-4 items-center">
+        <LiveAssistant />
+        
+        {activeModel.includes('pro') && (
+          <button 
+            onClick={() => setIsSearch(!isSearch)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black border transition-all ${isSearch ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}
+          >
+            🔍 Grounding {isSearch ? 'AÇIK' : 'KAPALI'}
+          </button>
+        )}
+
+        <ModelSelector />
+        
+        <div className="h-4 w-px bg-[var(--border-color)]" />
+
+        <div className="flex items-center gap-1.5">
+          {!isInputOpen && (
+            <button 
+              onClick={() => setIsInputOpen(true)}
+              className="p-2 rounded-xl hover:bg-[var(--bg-color-secondary)] text-[var(--accent-color)] transition-all font-black text-[10px] flex items-center gap-2 border border-[var(--accent-color)]"
+            >
+              ⚙️ AYARLAR
+            </button>
+          )}
+
+          <button 
+            onClick={() => setIsGuideOpen(true)}
+            title="Mühendislik Rehberi"
+            className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-base"
+          >
+            📖
+          </button>
+
+          <button 
+            onClick={startTutorial}
+            title="Yardım / Rehber"
+            className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-base"
+          >
+            ❓
+          </button>
+
+          <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-base">
+            {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -1,744 +1,504 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
 /* tslint:disable */
-// Copyright 2024 Google LLC
-
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-
-//     https://www.apache.org/licenses/LICENSE-2.0
-
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 import {useAtom, useSetAtom} from 'jotai';
-import getStroke from 'perfect-freehand';
-import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import React, {useCallback, useMemo, useRef, useState, useEffect} from 'react';
 import {ResizePayload, useResizeDetector} from 'react-resize-detector';
+import {GoogleGenAI} from '@google/genai';
 import {
-  ActiveColorAtom,
-  BoundingBoxes2DAtom,
-  BoundingBoxes3DAtom,
-  BoundingBoxMasksAtom,
-  DetectTypeAtom,
-  DrawModeAtom,
-  FOVAtom,
+  BrushOpacityAtom,
+  BrushShapeAtom,
+  BrushSizeAtom,
+  CurrentQualityMetadataAtom,
+  SecondaryQualityMetadataAtom,
   GeneratedImageSrcAtom,
-  ImageSentAtom,
+  SecondaryGeneratedImageSrcAtom,
+  GeneratedImageKeyAtom,
+  SecondaryGeneratedImageKeyAtom,
+  GeneratedVideoUrlAtom,
+  IsVideoLoadingAtom,
+  IsUpscalingAtom,
+  UpscaleSizeAtom,
   ImageSrcAtom,
   IsUploadedImageAtom,
-  LinesAtom,
-  PointsAtom,
-  RevealOnHoverModeAtom,
+  ROIActiveShapeAtom,
+  ROIAtom,
+  ROICursorPosAtom,
+  ROISelectedIdAtom,
+  IsDualModelModeAtom,
+  SynthesisModelAtom,
+  SecondarySynthesisModelAtom,
   ShareStream,
   VideoRefAtom,
+  ErrorAtom,
+  ActiveProjectIdAtom,
+  ZoomLevelAtom,
+  PanOffsetAtom,
+  IsMaskVisibleAtom,
 } from './atoms';
-import {lineOptions, segmentationColorsRgb} from './consts';
-import {useResetState} from './hooks';
-import {getSvgPathFromStroke} from './utils';
+import {useResetState, useROIDrawing, useManageGallery} from './hooks';
+import {ROIPolygon, ROIBrush, GalleryImageMetadata} from './Types';
+import {addGalleryMetadata} from './db';
 
-export function Content() {
-  const [imageSrc, setImageSrc] = useAtom(ImageSrcAtom);
-  const [generatedImageSrc] = useAtom(GeneratedImageSrcAtom);
-  const [boundingBoxes2D] = useAtom(BoundingBoxes2DAtom);
-  const [boundingBoxes3D] = useAtom(BoundingBoxes3DAtom);
-  const [boundingBoxMasks] = useAtom(BoundingBoxMasksAtom);
-  const [stream] = useAtom(ShareStream);
-  const [detectType, setDetectType] = useAtom(DetectTypeAtom);
-  const [videoRef] = useAtom(VideoRefAtom);
-  const [fov] = useAtom(FOVAtom);
-  const [, setImageSent] = useAtom(ImageSentAtom);
-  const [points] = useAtom(PointsAtom);
-  const [revealOnHover] = useAtom(RevealOnHoverModeAtom);
-  const [hoverEntered, setHoverEntered] = useState(false);
-  const [hoveredBox, _setHoveredBox] = useState<number | null>(null);
-  const [drawMode] = useAtom(DrawModeAtom);
-  const [lines, setLines] = useAtom(LinesAtom);
-  const [activeColor] = useAtom(ActiveColorAtom);
-  const isImageEditing = detectType === 'Image Editing';
-  const setIsUploadedImage = useSetAtom(IsUploadedImageAtom);
-  const resetState = useResetState();
-  const [exportFormat, setExportFormat] = useState('png');
-  const [exportQuality, setExportQuality] = useState(0.92);
+function EditorHeader({ isComparisonMode, setIsComparisonMode }: { isComparisonMode: boolean, setIsComparisonMode: (v: boolean) => void }) {
+  const [zoom, setZoom] = useAtom(ZoomLevelAtom);
+  const [pan, setPan] = useAtom(PanOffsetAtom);
+  const [isVisible, setIsVisible] = useAtom(IsMaskVisibleAtom);
 
-  // Handling resize and aspect ratios
-  const boundingBoxContainerRef = useRef<HTMLDivElement | null>(null);
-  const [containerDims, setContainerDims] = useState({
-    width: 0,
-    height: 0,
-  });
-  const [activeMediaDimensions, setActiveMediaDimensions] = useState({
-    width: 1,
-    height: 1,
-  });
-
-  const onResize = useCallback((el: ResizePayload) => {
-    if (el.width && el.height) {
-      setContainerDims({
-        width: el.width,
-        height: el.height,
-      });
-    }
-  }, []);
-
-  const {ref: containerRef} = useResizeDetector({onResize});
-
-  const boundingBoxContainer = useMemo(() => {
-    const {width, height} = activeMediaDimensions;
-    const aspectRatio = width / height;
-    const containerAspectRatio = containerDims.width / containerDims.height;
-    if (aspectRatio < containerAspectRatio) {
-      return {
-        height: containerDims.height,
-        width: containerDims.height * aspectRatio,
-      };
-    } else {
-      return {
-        width: containerDims.width,
-        height: containerDims.width / aspectRatio,
-      };
-    }
-  }, [containerDims, activeMediaDimensions]);
-
-  // Helper functions
-  function matrixMultiply(m: number[][], v: number[]): number[] {
-    return m.map((row: number[]) =>
-      row.reduce((sum, val, i) => sum + val * v[i], 0),
-    );
-  }
-
-  const linesAndLabels3D = useMemo(() => {
-    if (!boundingBoxContainer) {
-      return null;
-    }
-    let allLines = [];
-    let allLabels = [];
-    for (const box of boundingBoxes3D) {
-      const {center, size, rpy} = box;
-
-      // Convert Euler angles to quaternion
-      const [sr, sp, sy] = rpy.map((x) => Math.sin(x / 2));
-      const [cr, cp, cz] = rpy.map((x) => Math.cos(x / 2));
-      const quaternion = [
-        sr * cp * cz - cr * sp * sy,
-        cr * sp * cz + sr * cp * sy,
-        cr * cp * sy - sr * sp * cz,
-        cr * cp * cz + sr * sp * sy,
-      ];
-
-      // Calculate camera parameters
-      const height = boundingBoxContainer.height;
-      const width = boundingBoxContainer.width;
-      const f = width / (2 * Math.tan(((fov / 2) * Math.PI) / 180));
-      const cx = width / 2;
-      const cy = height / 2;
-      const intrinsics = [
-        [f, 0, cx],
-        [0, f, cy],
-        [0, 0, 1],
-      ];
-
-      // Get box vertices
-      const halfSize = size.map((s) => s / 2);
-      let corners = [];
-      for (let x of [-halfSize[0], halfSize[0]]) {
-        for (let y of [-halfSize[1], halfSize[1]]) {
-          for (let z of [-halfSize[2], halfSize[2]]) {
-            corners.push([x, y, z]);
-          }
-        }
-      }
-      corners = [
-        corners[1],
-        corners[3],
-        corners[7],
-        corners[5],
-        corners[0],
-        corners[2],
-        corners[6],
-        corners[4],
-      ];
-
-      // Apply rotation from quaternion
-      const q = quaternion;
-      const rotationMatrix = [
-        [
-          1 - 2 * q[1] ** 2 - 2 * q[2] ** 2,
-          2 * q[0] * q[1] - 2 * q[3] * q[2],
-          2 * q[0] * q[2] + 2 * q[3] * q[1],
-        ],
-        [
-          2 * q[0] * q[1] + 2 * q[3] * q[2],
-          1 - 2 * q[0] ** 2 - 2 * q[2] ** 2,
-          2 * q[1] * q[2] - 2 * q[3] * q[0],
-        ],
-        [
-          2 * q[0] * q[2] - 2 * q[3] * q[1],
-          2 * q[1] * q[2] + 2 * q[3] * q[0],
-          1 - 2 * q[0] ** 2 - 2 * q[1] ** 2,
-        ],
-      ];
-
-      const boxVertices = corners.map((corner) => {
-        const rotated = matrixMultiply(rotationMatrix, corner);
-        return rotated.map((val, idx) => val + center[idx]);
-      });
-
-      // Project 3D points to 2D
-      const tiltAngle = 90.0;
-      const viewRotationMatrix = [
-        [1, 0, 0],
-        [
-          0,
-          Math.cos((tiltAngle * Math.PI) / 180),
-          -Math.sin((tiltAngle * Math.PI) / 180),
-        ],
-        [
-          0,
-          Math.sin((tiltAngle * Math.PI) / 180),
-          Math.cos((tiltAngle * Math.PI) / 180),
-        ],
-      ];
-
-      const points = boxVertices;
-      const rotatedPoints = points.map((p) =>
-        matrixMultiply(viewRotationMatrix, p),
-      );
-      const translatedPoints = rotatedPoints.map((p) => p.map((v) => v + 0));
-      const projectedPoints = translatedPoints.map((p) =>
-        matrixMultiply(intrinsics, p),
-      );
-      const vertices = projectedPoints.map((p) => [p[0] / p[2], p[1] / p[2]]);
-
-      const topVertices = vertices.slice(0, 4);
-      const bottomVertices = vertices.slice(4, 8);
-
-      for (let i = 0; i < 4; i++) {
-        const lines = [
-          [topVertices[i], topVertices[(i + 1) % 4]],
-          [bottomVertices[i], bottomVertices[(i + 1) % 4]],
-          [topVertices[i], bottomVertices[i]],
-        ];
-
-        for (let [start, end] of lines) {
-          const dx = end[0] - start[0];
-          const dy = end[1] - start[1];
-          const length = Math.sqrt(dx * dx + dy * dy);
-          const angle = Math.atan2(dy, dx);
-
-          allLines.push({start, end, length, angle});
-        }
-      }
-
-      // Add label with fade effect
-      const textPosition3d = points[0].map(
-        (_, idx) => points.reduce((sum, p) => sum + p[idx], 0) / points.length,
-      );
-      textPosition3d[2] += 0.1;
-
-      const textPoint = matrixMultiply(
-        intrinsics,
-        matrixMultiply(
-          viewRotationMatrix,
-          textPosition3d.map((v) => v + 0),
-        ),
-      );
-      const textPos = [
-        textPoint[0] / textPoint[2],
-        textPoint[1] / textPoint[2],
-      ];
-      allLabels.push({label: box.label, pos: textPos});
-    }
-    return [allLines, allLabels] as const;
-  }, [boundingBoxes3D, boundingBoxContainer, fov]);
-
-  function setHoveredBox(e: React.PointerEvent) {
-    const boxes = document.querySelectorAll('.bbox');
-    const dimensionsAndIndex = Array.from(boxes).map((box, i) => {
-      const {top, left, width, height} = box.getBoundingClientRect();
-      return {
-        top,
-        left,
-        width,
-        height,
-        index: i,
-      };
-    });
-    // Sort smallest to largest
-    const sorted = dimensionsAndIndex.sort(
-      (a, b) => a.width * a.height - b.width * b.height,
-    );
-    // Find the smallest box that contains the mouse
-    const {clientX, clientY} = e;
-    const found = sorted.find(({top, left, width, height}) => {
-      return (
-        clientX > left &&
-        clientX < left + width &&
-        clientY > top &&
-        clientY < top + height
-      );
-    });
-    if (found) {
-      _setHoveredBox(found.index);
-    } else {
-      _setHoveredBox(null);
-    }
-  }
-
-  function downloadImage() {
-    if (!generatedImageSrc) return;
-
-    if (exportFormat === 'png') {
-      // The source is already a PNG data URL, so we can download it directly.
-      const a = document.createElement('a');
-      a.href = generatedImageSrc;
-      a.download = 'edited-image.png';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    } else if (exportFormat === 'jpeg') {
-      // For JPEG, we need to draw the image to a canvas and convert it.
-      const image = new Image();
-      image.src = generatedImageSrc;
-      image.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = image.naturalWidth;
-        canvas.height = image.naturalHeight;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          // In case the PNG has transparency, draw a white background first.
-          ctx.fillStyle = '#FFFFFF';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(image, 0, 0);
-
-          const jpegDataUrl = canvas.toDataURL('image/jpeg', exportQuality);
-
-          const a = document.createElement('a');
-          a.href = jpegDataUrl;
-          a.download = 'edited-image.jpeg';
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-        }
-      };
-    }
-  }
-
-  function handleUseForDetection() {
-    if (!generatedImageSrc) return;
-    const currentGeneratedImage = generatedImageSrc;
-    resetState();
-    setImageSrc(currentGeneratedImage);
-    setIsUploadedImage(true);
-    setDetectType('2D bounding boxes');
-  }
-
-  const downRef = useRef<Boolean>(false);
-
-  if (isImageEditing) {
-    return (
-      <div className="w-full grow flex flex-col md:flex-row p-2 md:p-4 gap-4">
-        <div className="flex-1 flex flex-col items-center justify-center gap-2 min-h-0">
-          <div className="text-sm uppercase text-[var(--text-color-secondary)]">
-            Original
-          </div>
-          <div className="relative w-full h-full border border-[var(--border-color)] rounded-lg overflow-hidden">
-            {stream ? (
-              <video
-                className="absolute top-0 left-0 w-full h-full object-contain"
-                autoPlay
-                ref={(video) => {
-                  videoRef.current = video;
-                  if (video && !video.srcObject) {
-                    video.srcObject = stream;
-                  }
-                }}
-              />
-            ) : imageSrc ? (
-              <img
-                src={imageSrc}
-                className="absolute top-0 left-0 w-full h-full object-contain"
-                alt="Original image"
-              />
-            ) : (
-              <div className="flex items-center justify-center h-full text-[var(--text-color-secondary)] p-4 text-center">
-                Upload an image or start screenshare.
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="flex-1 flex flex-col items-center justify-center gap-2 min-h-0">
-          <div className="text-sm uppercase text-[var(--text-color-secondary)]">
-            Edited
-          </div>
-          <div className="relative w-full h-full border border-[var(--border-color)] rounded-lg overflow-hidden bg-[var(--input-color)]">
-            {generatedImageSrc ? (
-              <>
-                <img
-                  src={generatedImageSrc}
-                  className="absolute top-0 left-0 w-full h-full object-contain"
-                  alt="Edited image"
-                />
-                <div className="absolute bottom-3 left-3 right-3 flex flex-col gap-2">
-                  <div className="flex flex-col lg:flex-row items-center justify-between gap-4 bg-white/80 dark:bg-black/80 p-2 rounded-lg text-sm text-[var(--text-color-primary)] backdrop-blur-sm">
-                    {/* Left side: Export Options */}
-                    <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
-                      <div className="flex items-center gap-2 self-start sm:self-center">
-                        <span className="font-bold whitespace-nowrap">
-                          Format:
-                        </span>
-                        <label className="flex items-center gap-1 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="format"
-                            value="png"
-                            checked={exportFormat === 'png'}
-                            onChange={() => setExportFormat('png')}
-                          />{' '}
-                          PNG
-                        </label>
-                        <label className="flex items-center gap-1 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="format"
-                            value="jpeg"
-                            checked={exportFormat === 'jpeg'}
-                            onChange={() => setExportFormat('jpeg')}
-                          />{' '}
-                          JPEG
-                        </label>
-                      </div>
-                      {exportFormat === 'jpeg' && (
-                        <div className="flex items-center gap-2 w-full sm:w-auto">
-                          <label className="whitespace-nowrap">
-                            Quality:
-                          </label>
-                          <input
-                            type="range"
-                            className="w-full"
-                            min="0.1"
-                            max="1"
-                            step="0.01"
-                            value={exportQuality}
-                            onChange={(e) =>
-                              setExportQuality(Number(e.target.value))
-                            }
-                          />
-                          <span>{exportQuality.toFixed(2)}</span>
-                        </div>
-                      )}
-                    </div>
-                    {/* Right side: Action Buttons */}
-                    <div className="flex gap-2 w-full lg:w-auto justify-end">
-                      <button
-                        onClick={handleUseForDetection}
-                        className="secondary flex grow lg:grow-0 items-center gap-2 justify-center"
-                        style={{
-                          background: 'rgba(255,255,255,0.8)',
-                          color: '#000',
-                        }}>
-                        <span aria-hidden="true">🎯</span>
-                        <span className="hidden sm:inline">
-                          Use for Detection
-                        </span>
-                      </button>
-                      <button
-                        onClick={downloadImage}
-                        className="secondary flex grow lg:grow-0 items-center gap-2 justify-center"
-                        style={{
-                          background: 'rgba(255,255,255,0.8)',
-                          color: '#000',
-                        }}>
-                        <span aria-hidden="true">⬇️</span>
-                        <span className="hidden sm:inline">Download</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="flex items-center justify-center h-full text-[var(--text-color-secondary)] p-4 text-center">
-                Your edited image will appear here.
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const handleZoomIn = () => setZoom(prev => Math.min(prev + 0.25, 5));
+  const handleZoomOut = () => setZoom(prev => Math.max(prev - 0.25, 0.5));
+  const handleReset = () => { setZoom(1); setPan({x: 0, y: 0}); };
 
   return (
-    <div ref={containerRef} className="w-full grow relative">
-      {stream ? (
-        <video
-          className="absolute top-0 left-0 w-full h-full object-contain"
-          autoPlay
-          onLoadedMetadata={(e) => {
-            setActiveMediaDimensions({
-              width: e.currentTarget.videoWidth,
-              height: e.currentTarget.videoHeight,
-            });
-          }}
-          ref={(video) => {
-            videoRef.current = video;
-            if (video && !video.srcObject) {
-              video.srcObject = stream;
-            }
-          }}
-        />
-      ) : imageSrc ? (
-        <img
-          src={imageSrc}
-          className="absolute top-0 left-0 w-full h-full object-contain"
-          alt="Uploaded image"
-          onLoad={(e) => {
-            setActiveMediaDimensions({
-              width: e.currentTarget.naturalWidth,
-              height: e.currentTarget.naturalHeight,
-            });
-          }}
-        />
-      ) : null}
-      <div
-        className={`absolute w-full h-full left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 ${hoverEntered ? 'hide-box' : ''} ${drawMode ? 'cursor-crosshair' : ''}`}
-        ref={boundingBoxContainerRef}
-        onPointerEnter={(e) => {
-          if (revealOnHover && !drawMode) {
-            setHoverEntered(true);
-            setHoveredBox(e);
-          }
-        }}
-        onPointerMove={(e) => {
-          if (revealOnHover && !drawMode) {
-            setHoverEntered(true);
-            setHoveredBox(e);
-          }
-          if (downRef.current) {
-            const parentBounds =
-              boundingBoxContainerRef.current!.getBoundingClientRect();
-            setLines((prev) => [
-              ...prev.slice(0, prev.length - 1),
-              [
-                [
-                  ...prev[prev.length - 1][0],
-                  [
-                    (e.clientX - parentBounds.left) /
-                      boundingBoxContainer!.width,
-                    (e.clientY - parentBounds.top) /
-                      boundingBoxContainer!.height,
-                  ],
-                ],
-                prev[prev.length - 1][1],
-              ],
-            ]);
-          }
-        }}
-        onPointerLeave={(e) => {
-          if (revealOnHover && !drawMode) {
-            setHoverEntered(false);
-            setHoveredBox(e);
-          }
-        }}
-        onPointerDown={(e) => {
-          if (drawMode) {
-            setImageSent(false);
-            (e.target as HTMLElement).setPointerCapture(e.pointerId);
-            downRef.current = true;
-            const parentBounds =
-              boundingBoxContainerRef.current!.getBoundingClientRect();
-            setLines((prev) => [
-              ...prev,
-              [
-                [
-                  [
-                    (e.clientX - parentBounds.left) /
-                      boundingBoxContainer!.width,
-                    (e.clientY - parentBounds.top) /
-                      boundingBoxContainer!.height,
-                  ],
-                ],
-                activeColor,
-              ],
-            ]);
-          }
-        }}
-        onPointerUp={(e) => {
-          if (drawMode) {
-            (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-            downRef.current = false;
-          }
-        }}
-        style={{
-          width: boundingBoxContainer.width,
-          height: boundingBoxContainer.height,
-        }}>
-        {lines.length > 0 && (
-          <svg
-            className="absolute top-0 left-0 w-full h-full"
-            style={{
-              pointerEvents: 'none',
-              width: boundingBoxContainer?.width,
-              height: boundingBoxContainer?.height,
-            }}>
-            {lines.map(([points, color], i) => (
-              <path
-                key={i}
-                d={getSvgPathFromStroke(
-                  getStroke(
-                    points.map(([x, y]) => [
-                      x * boundingBoxContainer!.width,
-                      y * boundingBoxContainer!.height,
-                      0.5,
-                    ]),
-                    lineOptions,
-                  ),
-                )}
-                fill={color}
-              />
-            ))}
-          </svg>
-        )}
-        {detectType === '2D bounding boxes' &&
-          boundingBoxes2D.map((box, i) => (
-            <div
-              key={i}
-              className={`absolute bbox border-2 border-[#3B68FF] ${i === hoveredBox ? 'reveal' : ''}`}
-              style={{
-                transformOrigin: '0 0',
-                top: box.y * 100 + '%',
-                left: box.x * 100 + '%',
-                width: box.width * 100 + '%',
-                height: box.height * 100 + '%',
-              }}>
-              <div className="bg-[#3B68FF] text-white absolute left-0 top-0 text-sm px-1">
-                {box.label}
-              </div>
-            </div>
-          ))}
-        {detectType === 'Segmentation masks' &&
-          boundingBoxMasks.map((box, i) => (
-            <div
-              key={i}
-              className={`absolute bbox border-2 border-[#3B68FF] ${i === hoveredBox ? 'reveal' : ''}`}
-              style={{
-                transformOrigin: '0 0',
-                top: box.y * 100 + '%',
-                left: box.x * 100 + '%',
-                width: box.width * 100 + '%',
-                height: box.height * 100 + '%',
-              }}>
-              <BoxMask box={box} index={i} />
-              <div className="w-full top-0 h-0 absolute">
-                <div className="bg-[#3B68FF] text-white absolute -left-[2px] bottom-0 text-sm px-1">
-                  {box.label}
-                </div>
-              </div>
-            </div>
-          ))}
+    <div className="flex items-center justify-between px-4 py-2 bg-[var(--bg-color)] border-b border-[var(--border-color)] shrink-0 z-30 shadow-sm">
+      <div className="flex bg-[var(--bg-color-secondary)] p-1 rounded-xl border border-[var(--border-color)]">
+        <button 
+          className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all ${!isComparisonMode ? 'bg-[var(--accent-color)] text-white shadow-sm' : 'text-[var(--text-color-secondary)] hover:bg-black/5'}`} 
+          onClick={() => setIsComparisonMode(false)}
+        >
+          YAN YANA
+        </button>
+        <button 
+          className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all ${isComparisonMode ? 'bg-[var(--accent-color)] text-white shadow-sm' : 'text-[var(--text-color-secondary)] hover:bg-black/5'}`} 
+          onClick={() => setIsComparisonMode(true)}
+        >
+          KARŞILAŞTIRMA
+        </button>
+      </div>
 
-        {detectType === 'Points' &&
-          points.map((point, i) => {
-            return (
-              <div
-                key={i}
-                className="absolute bg-red"
-                style={{
-                  left: `${point.point.x * 100}%`,
-                  top: `${point.point.y * 100}%`,
-                }}>
-                <div className="absolute bg-[#3B68FF] text-center text-white text-xs px-1 bottom-4 rounded-sm -translate-x-1/2 left-1/2">
-                  {point.label}
-                </div>
-                <div className="absolute w-4 h-4 bg-[#3B68FF] rounded-full border-white border-[2px] -translate-x-1/2 -translate-y-1/2"></div>
-              </div>
-            );
-          })}
-        {detectType === '3D bounding boxes' && linesAndLabels3D ? (
-          <>
-            {linesAndLabels3D[0].map((line, i) => (
-              <div
-                key={i}
-                className="absolute h-[2px] bg-[#3B68FF]"
-                style={{
-                  width: `${line.length}px`,
-                  transform: `translate(${line.start[0]}px, ${line.start[1]}px) rotate(${line.angle}rad)`,
-                  transformOrigin: '0 0',
-                }}></div>
-            ))}
-            {linesAndLabels3D[1].map((label, i) => (
-              <div
-                key={i}
-                className="absolute bg-[#3B68FF] text-white text-xs px-1"
-                style={{
-                  top: `${label.pos[1]}px`,
-                  left: `${label.pos[0]}px`,
-                  transform: 'translate(-50%, -50%)',
-                }}>
-                {label.label}
-              </div>
-            ))}
-          </>
-        ) : null}
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-1 bg-[var(--bg-color-secondary)] p-1 rounded-xl border border-[var(--border-color)]">
+          <button onClick={handleZoomOut} className="w-8 h-8 flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 rounded-lg text-xs font-bold">➖</button>
+          <div className="flex items-center justify-center px-3 text-[10px] font-mono font-black min-w-[55px]">{Math.round(zoom * 100)}%</div>
+          <button onClick={handleZoomIn} className="w-8 h-8 flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 rounded-lg text-xs font-bold">➕</button>
+          <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
+          <button onClick={handleReset} title="Görünümü Sıfırla" className="w-8 h-8 flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 rounded-lg text-sm">↺</button>
+        </div>
+
+        <button 
+          onClick={() => setIsVisible(!isVisible)}
+          className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all flex items-center gap-2 border ${isVisible ? 'bg-[var(--accent-color)] text-white border-[var(--accent-color)]' : 'bg-transparent text-[var(--text-color-secondary)] border-[var(--border-color)]'}`}
+        >
+          {isVisible ? '👁️ Maskeler Açık' : '🙈 Maskeler Kapalı'}
+        </button>
       </div>
     </div>
   );
 }
 
-function BoxMask({
-  box,
-  index,
-}: {
-  box: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    label: string;
-    imageData: string;
-  };
-  index: number;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const rgb = segmentationColorsRgb[index % segmentationColorsRgb.length];
+function ROIToolbar() {
+  const [activeTool, setActiveTool] = useAtom(ROIActiveShapeAtom);
+  const [rois, setRois] = useAtom(ROIAtom);
+  const [selectedId, setSelectedId] = useAtom(ROISelectedIdAtom);
+  const [brushSize, setBrushSize] = useAtom(BrushSizeAtom);
 
-  useEffect(() => {
-    if (canvasRef.current) {
-      const ctx = canvasRef.current.getContext('2d');
-      if (ctx) {
-        const image = new Image();
-        image.src = box.imageData;
-        image.onload = () => {
-          canvasRef.current!.width = image.width;
-          canvasRef.current!.height = image.height;
-          ctx.imageSmoothingEnabled = false;
-          ctx.drawImage(image, 0, 0);
-          const pixels = ctx.getImageData(0, 0, image.width, image.height);
-          const data = pixels.data;
-          for (let i = 0; i < data.length; i += 4) {
-            // alpha from mask
-            data[i + 3] = data[i];
-            // color from palette
-            data[i] = rgb[0];
-            data[i + 1] = rgb[1];
-            data[i + 2] = rgb[2];
-          }
-          ctx.putImageData(pixels, 0, 0);
-        };
-      }
-    }
-  }, [canvasRef, box.imageData, rgb]);
+  const tools = [
+    { id: 'select', icon: '🎯', label: 'Seç', key: 'V' },
+    { id: 'pan', icon: '🤚', label: 'Kaydır', key: 'H' },
+    { id: 'brush', icon: '🖌️', label: 'Fırça', key: 'B' },
+    { id: 'rectangle', icon: '⬛', label: 'Kutu', key: 'R' },
+    { id: 'circle', icon: '⭕', label: 'Daire', key: 'C' },
+    { id: 'polygon', icon: '📐', label: 'Poligon', key: 'P' },
+  ];
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="absolute top-0 left-0 w-full h-full"
-      style={{opacity: 0.5}}
-    />
+    <div className="flex flex-col gap-3 p-2 bg-[var(--bg-color)] border-r border-[var(--border-color)] z-20 overflow-y-auto w-[72px] shrink-0 h-full">
+      <div className="flex flex-col gap-1.5">
+        {tools.map(tool => (
+          <button 
+            key={tool.id} 
+            title={`${tool.label} (${tool.key})`}
+            className={`w-12 h-12 flex flex-col items-center justify-center rounded-xl border-2 transition-all relative group ${activeTool === tool.id ? 'bg-[var(--accent-color)] border-[var(--accent-color)] text-white shadow-lg' : 'border-transparent hover:bg-[var(--bg-color-secondary)] text-[var(--text-color-secondary)]'}`} 
+            onClick={() => {setActiveTool(tool.id as any); if (tool.id !== 'select') setSelectedId(null);}}
+          >
+            <span className="text-lg">{tool.icon}</span>
+            <span className="text-[7px] font-black mt-0.5 uppercase opacity-60 group-hover:opacity-100">{tool.label}</span>
+            {activeTool !== tool.id && (
+               <span className="absolute bottom-1 right-1 text-[6px] font-bold opacity-30">{tool.key}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      <div className="w-full h-px bg-[var(--border-color)] my-1" />
+
+      <button 
+        className="w-12 h-12 flex flex-col items-center justify-center rounded-xl hover:bg-red-50 text-red-500 transition-colors border-2 border-transparent" 
+        onClick={() => {setRois([]); setSelectedId(null);}}
+        title="Tüm Maskeleri Temizle"
+      >
+        <span className="text-lg">🗑️</span>
+        <span className="text-[7px] font-black uppercase mt-0.5">TEMİZLE</span>
+      </button>
+
+      {(activeTool === 'brush' || (selectedId && rois.find(r => r.id === selectedId)?.type === 'brush')) && (
+        <div className="mt-auto pt-4 border-t border-[var(--border-color)]">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
+              <span className="text-[8px] font-black text-[var(--text-color-secondary)] uppercase">Boyut</span>
+              <span className="text-[10px] font-mono font-bold text-[var(--accent-color)]">{brushSize}px</span>
+            </div>
+            <div className="h-32 w-full flex justify-center">
+               <input 
+                type="range" 
+                min="2" 
+                max="150" 
+                value={brushSize} 
+                onChange={(e) => setBrushSize(Number(e.target.value))} 
+                className="h-1.5 w-24 origin-center -rotate-90 mt-12 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[var(--accent-color)]" 
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
+
+function QualityScoreOverlay({ metadata, imageKey, onClose }: { metadata: GalleryImageMetadata | null, imageKey: number | null, onClose: () => void }) {
+  const [localMetadata, setLocalMetadata] = useState<GalleryImageMetadata | null>(metadata);
+
+  useEffect(() => { setLocalMetadata(metadata); }, [metadata]);
+
+  if (!localMetadata) return null;
+
+  const getScoreColor = (score: number) => {
+    if (score >= 85) return 'text-green-500';
+    if (score >= 60) return 'text-orange-500';
+    return 'text-red-500';
+  };
+
+  const handleRating = async (rating: 'up' | 'down') => {
+    if (!imageKey) return;
+    const updatedMeta: GalleryImageMetadata = { ...localMetadata, userRating: rating };
+    setLocalMetadata(updatedMeta);
+    await addGalleryMetadata(imageKey, updatedMeta);
+  };
+
+  return (
+    <div className="absolute top-4 right-4 z-50 bg-white/95 dark:bg-black/90 p-5 rounded-2xl border border-[var(--border-color)] shadow-2xl min-w-[260px] backdrop-blur-md animate-in fade-in slide-in-from-right-4">
+      {/* Kapatma Butonu */}
+      <button 
+        onClick={onClose}
+        className="absolute top-3 right-3 w-6 h-6 flex items-center justify-center rounded-full bg-black/5 hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10 transition-colors text-[var(--text-color-secondary)] hover:text-[var(--text-color-primary)]"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+
+      <div className="flex items-center gap-4 pr-6">
+        <div className={`text-4xl font-black ${getScoreColor(localMetadata.qualityScore)}`}>{localMetadata.qualityScore}</div>
+        <div className="flex flex-col">
+          <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-color-secondary)]">Kalite Analizi</span>
+          <span className="text-xs italic leading-tight text-[var(--text-color-primary)] opacity-80">{localMetadata.qualityFeedback}</span>
+        </div>
+      </div>
+      
+      <div className="mt-5 pt-5 border-t border-[var(--border-color)] flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-black uppercase text-[var(--text-color-secondary)]">Memnuniyet</span>
+          <div className="flex gap-2">
+            <button onClick={() => handleRating('up')} className={`p-2 rounded-xl transition-all ${localMetadata.userRating === 'up' ? 'bg-green-100 text-green-600' : 'bg-gray-50 text-gray-400'}`}>👍</button>
+            <button onClick={() => handleRating('down')} className={`p-2 rounded-xl transition-all ${localMetadata.userRating === 'down' ? 'bg-red-100 text-red-600' : 'bg-gray-50 text-gray-400'}`}>👎</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function Content() {
+  const [imageSrc] = useAtom(ImageSrcAtom);
+  const [generatedImageSrc, setGeneratedImageSrc] = useAtom(GeneratedImageSrcAtom);
+  const [secondaryGeneratedImageSrc] = useAtom(SecondaryGeneratedImageSrcAtom);
+  const [generatedImageKey] = useAtom(GeneratedImageKeyAtom);
+  const [secondaryGeneratedImageKey] = useAtom(SecondaryGeneratedImageKeyAtom);
+  const [qualityMetadata, setQualityMetadata] = useAtom(CurrentQualityMetadataAtom);
+  const [secondaryQualityMetadata, setSecondaryQualityMetadata] = useAtom(SecondaryQualityMetadataAtom);
+  
+  const [generatedVideoUrl, setGeneratedVideoUrl] = useAtom(GeneratedVideoUrlAtom);
+  const [isVideoLoading, setIsVideoLoading] = useAtom(IsVideoLoadingAtom);
+  const [isUpscaling, setIsUpscaling] = useAtom(IsUpscalingAtom);
+  const [upscaleSize, setUpscaleSize] = useAtom(UpscaleSizeAtom);
+  const [stream] = useAtom(ShareStream);
+  const [videoRef] = useAtom(VideoRefAtom);
+  const [activeProjectId] = useAtom(ActiveProjectIdAtom);
+  const [zoom, setZoom] = useAtom(ZoomLevelAtom);
+  const [pan, setPan] = useAtom(PanOffsetAtom);
+  const [isMaskVisible] = useAtom(IsMaskVisibleAtom);
+  
+  const [isDualMode] = useAtom(IsDualModelModeAtom);
+  const [modelA] = useAtom(SynthesisModelAtom);
+  const [modelB] = useAtom(SecondarySynthesisModelAtom);
+
+  const setError = useSetAtom(ErrorAtom);
+  const {addGalleryItem} = useManageGallery();
+
+  const [rois] = useAtom(ROIAtom);
+  const [roiActiveTool] = useAtom(ROIActiveShapeAtom);
+  const [roiCursorPos] = useAtom(ROICursorPosAtom);
+  const [selectedROIId] = useAtom(ROISelectedIdAtom);
+  const [brushSize] = useAtom(BrushSizeAtom);
+
+  const [isComparisonMode, setIsComparisonMode] = useState(false);
+  const [sliderPos, setSliderPos] = useState(50);
+  const comparisonRef = useRef<HTMLDivElement>(null);
+  const [containerDims, setContainerDims] = useState({width: 0, height: 0});
+  const [mediaDims, setMediaDims] = useState({width: 1, height: 1});
+  const isPanningRef = useRef(false);
+  const lastPanPos = useRef({x: 0, y: 0});
+  
+  const onResize = useCallback((el: ResizePayload) => { if (el.width && el.height) setContainerDims({width: el.width, height: el.height}); }, []);
+  const {ref: containerRef} = useResizeDetector({onResize});
+
+  const scaledMediaDims = useMemo(() => {
+    const {width, height} = mediaDims;
+    if (!containerDims.width || !containerDims.height || !width || !height) return {width: 0, height: 0};
+    const aspectRatio = width / height;
+    const containerAspectRatio = containerDims.width / containerDims.height;
+    return aspectRatio < containerAspectRatio 
+      ? { height: containerDims.height, width: containerDims.height * aspectRatio }
+      : { width: containerDims.width, height: containerDims.width / aspectRatio };
+  }, [containerDims, mediaDims]);
+
+  const drawingContainerRef = useRef<HTMLDivElement | null>(null);
+  const { handlePointerDown, handlePointerMove, handlePointerUp, handlePointerLeave } = useROIDrawing(drawingContainerRef, scaledMediaDims);
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (roiActiveTool === 'pan' || e.button === 1) {
+      isPanningRef.current = true;
+      lastPanPos.current = {x: e.clientX, y: e.clientY};
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      return;
+    }
+    handlePointerDown(e as any);
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (isPanningRef.current) {
+      const dx = (e.clientX - lastPanPos.current.x) / zoom;
+      const dy = (e.clientY - lastPanPos.current.y) / zoom;
+      setPan(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+      lastPanPos.current = {x: e.clientX, y: e.clientY};
+      return;
+    }
+    handlePointerMove(e as any);
+  };
+
+  const onPointerUp = (e: React.PointerEvent) => {
+    if (isPanningRef.current) {
+      isPanningRef.current = false;
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      return;
+    }
+    handlePointerUp(e as any);
+  };
+
+  const handleSliderMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!comparisonRef.current) return;
+    const rect = comparisonRef.current.getBoundingClientRect();
+    const x = ('touches' in e) ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const position = ((x - rect.left) / rect.width) * 100;
+    setSliderPos(Math.max(0, Math.min(100, position)));
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (e.ctrlKey) {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.1 : 0.1;
+      setZoom(prev => Math.max(0.5, Math.min(5, prev + delta)));
+    }
+  };
+
+  const transformStyle = {
+    transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)`,
+    transformOrigin: 'center center',
+    width: '100%',
+    height: '100%',
+    transition: isPanningRef.current ? 'none' : 'transform 200ms cubic-bezier(0.19, 1, 0.22, 1)'
+  };
+
+  const generateVideoFromImage = async () => {
+    if (!generatedImageSrc) return;
+    setIsVideoLoading(true);
+    setGeneratedVideoUrl(null);
+    try {
+      const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+      const base64 = generatedImageSrc.split(',')[1];
+      let operation = await ai.models.generateVideos({
+        model: 'veo-3.1-fast-generate-preview',
+        prompt: 'Professional cinematic movement',
+        image: { imageBytes: base64, mimeType: 'image/png' },
+        config: { numberOfVideos: 1, resolution: '720p', aspectRatio: '1:1' }
+      });
+      while (!operation.done) {
+        await new Promise(r => setTimeout(r, 8000));
+        operation = await ai.operations.getVideosOperation({operation: operation});
+      }
+      const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+      const res = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
+      const blob = await res.blob();
+      setGeneratedVideoUrl(URL.createObjectURL(blob));
+    } catch (e: any) {
+      setError("Video sentezi başarısız: " + e.message);
+    } finally {
+      setIsVideoLoading(false);
+    }
+  };
+
+  const upscaleImage = async () => {
+    const source = generatedImageSrc || imageSrc;
+    if (!source) return;
+    setIsUpscaling(true);
+    try {
+      const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+      const base64 = source.split(',')[1];
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-image-preview',
+        contents: {
+          parts: [{ inlineData: { data: base64, mimeType: 'image/png' } }, { text: `Upscale to ${upscaleSize}` }]
+        },
+        config: { imageConfig: { aspectRatio: "1:1", imageSize: upscaleSize } }
+      });
+      const upscaledBase64 = response.candidates[0].content.parts.find(p => p.inlineData)?.inlineData?.data;
+      if (upscaledBase64) setGeneratedImageSrc(`data:image/png;base64,${upscaledBase64}`);
+    } catch (e: any) {
+      setError("Upscale başarısız: " + e.message);
+    } finally {
+      setIsUpscaling(false);
+    }
+  };
+
+  return (
+    <div className="w-full flex h-full overflow-hidden bg-[var(--bg-color-secondary)]" onWheel={handleWheel}>
+      {!isComparisonMode && <ROIToolbar />}
+
+      <div className="flex-1 flex flex-col min-w-0 h-full">
+        <EditorHeader isComparisonMode={isComparisonMode} setIsComparisonMode={setIsComparisonMode} />
+        
+        <div className="flex-1 relative min-h-0 flex gap-0 h-full overflow-hidden">
+          {!isComparisonMode ? (
+            <>
+              {(!isDualMode || (!generatedImageSrc && !secondaryGeneratedImageSrc)) && (
+                <div className="flex-1 flex flex-col min-w-0 border-r border-[var(--border-color)] bg-black/5 dark:bg-black/40">
+                  <div className="flex items-center justify-between px-4 py-2 bg-[var(--bg-color)]/50 border-b border-[var(--border-color)]">
+                    <div className="text-[10px] font-black uppercase tracking-widest text-[var(--text-color-secondary)]">Giriş Görüntüsü</div>
+                    {imageSrc && <div className="text-[9px] font-mono text-gray-400">{mediaDims.width}x{mediaDims.height}</div>}
+                  </div>
+                  <div ref={containerRef} className="relative flex-1 overflow-hidden bg-black shadow-inner group">
+                    <div className="relative h-full" style={transformStyle} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={handlePointerLeave}>
+                      {stream ? (
+                        <video className="absolute top-0 left-0 w-full h-full object-contain" autoPlay ref={(v) => { if (v) { v.srcObject = stream; setMediaDims({width: v.videoWidth || 1, height: v.videoHeight || 1}); } }} />
+                      ) : imageSrc ? (
+                        <img src={imageSrc} className="absolute top-0 left-0 w-full h-full object-contain pointer-events-none" alt="Input" onLoad={(e) => setMediaDims({width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight})} />
+                      ) : <div className="flex items-center justify-center h-full text-gray-500 text-[10px] font-black uppercase tracking-widest opacity-40">Görüntü Bekleniyor</div>}
+                      
+                      <div ref={drawingContainerRef} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none" style={{ width: scaledMediaDims.width, height: scaledMediaDims.height }}>
+                        <svg className={`absolute top-0 left-0 w-full h-full transition-opacity duration-300 ${isMaskVisible ? 'opacity-100' : 'opacity-0'}`}>
+                          {rois.map((shape) => {
+                            const w = scaledMediaDims.width; const h = scaledMediaDims.height;
+                            const isSelected = shape.id === selectedROIId;
+                            const color = isSelected ? 'var(--accent-color)' : 'white';
+                            return (
+                              <g key={shape.id}>
+                                {shape.type === 'brush' && <polyline points={shape.points.map(p => `${p.x * w},${p.y * h}`).join(' ')} stroke={color} strokeWidth={shape.strokeWidth * w} fill="none" strokeOpacity={shape.opacity} />}
+                                {shape.type === 'rectangle' && <rect x={shape.x * w} y={shape.y * h} width={shape.width * w} height={shape.height * h} fill="rgba(255,255,255,0.1)" stroke={color} strokeWidth="2" />}
+                                {shape.type === 'circle' && <circle cx={shape.x * w} cy={shape.y * h} r={shape.radius * w} fill="rgba(255,255,255,0.1)" stroke={color} strokeWidth="2" />}
+                                {(shape.type === 'polygon' || shape.type === 'freehand') && <polyline points={shape.points.map(p => `${p.x * w},${p.y * h}`).join(' ')} fill="rgba(255,255,255,0.1)" stroke={color} strokeWidth="2" />}
+                              </g>
+                            );
+                          })}
+                          {roiCursorPos && roiActiveTool === 'brush' && <circle cx={roiCursorPos.x * scaledMediaDims.width} cy={roiCursorPos.y * scaledMediaDims.height} r={brushSize/2} fill="rgba(255,255,255,0.2)" stroke="white" />}
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex-1 flex flex-col min-w-0 bg-black/10 dark:bg-black/60 border-r border-[var(--border-color)]">
+                <div className="px-4 py-2 bg-[var(--bg-color)]/50 border-b border-[var(--border-color)]">
+                   <div className="text-[10px] font-black uppercase tracking-widest text-[var(--text-color-secondary)]">
+                    {isDualMode ? `MOTOR A: ${modelA}` : 'Sentezlenen Sonuç'}
+                   </div>
+                </div>
+                <div className="relative flex-1 overflow-hidden bg-black flex items-center justify-center">
+                  {qualityMetadata && !isDualMode && (
+                    <QualityScoreOverlay 
+                      metadata={qualityMetadata} 
+                      imageKey={generatedImageKey} 
+                      onClose={() => setQualityMetadata(null)}
+                    />
+                  )}
+                  <div className="w-full h-full" style={transformStyle}>
+                    {(isVideoLoading || isUpscaling) ? (
+                      <div className="flex flex-col items-center justify-center h-full gap-4">
+                        <div className="w-12 h-12 border-4 border-[var(--accent-color)] border-t-transparent rounded-full animate-spin" />
+                        <div className="text-[10px] font-black text-white/50 animate-pulse">İŞLENİYOR...</div>
+                      </div>
+                    ) : generatedVideoUrl ? (
+                      <video src={generatedVideoUrl} className="w-full h-full object-contain" autoPlay loop muted controls />
+                    ) : generatedImageSrc ? (
+                      <>
+                        <img src={generatedImageSrc} className="w-full h-full object-contain" alt="Generated A" />
+                        {!isDualMode && (
+                          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 pointer-events-auto">
+                            <button onClick={upscaleImage} className="bg-purple-600 text-white px-4 py-2 rounded-xl text-[10px] font-black shadow-lg">✨ UPSCALE</button>
+                            <button onClick={generateVideoFromImage} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-[10px] font-black shadow-lg">🎬 ANİMASYON</button>
+                          </div>
+                        )}
+                      </>
+                    ) : <div className="text-gray-500 opacity-30 uppercase font-black tracking-widest text-[10px] flex h-full items-center justify-center">Sonuç Bekleniyor</div>}
+                  </div>
+                </div>
+              </div>
+
+              {isDualMode && (
+                <div className="flex-1 flex flex-col min-w-0 bg-black/20 dark:bg-black/80">
+                  <div className="px-4 py-2 bg-[var(--bg-color)]/50 border-b border-[var(--border-color)]">
+                    <div className="text-[10px] font-black uppercase tracking-widest text-[var(--text-color-secondary)]">MOTOR B: {modelB}</div>
+                  </div>
+                  <div className="relative flex-1 overflow-hidden bg-black flex items-center justify-center">
+                    {secondaryQualityMetadata && (
+                      <QualityScoreOverlay 
+                        metadata={secondaryQualityMetadata} 
+                        imageKey={secondaryGeneratedImageKey} 
+                        onClose={() => setSecondaryQualityMetadata(null)}
+                      />
+                    )}
+                    <div className="w-full h-full" style={transformStyle}>
+                      {secondaryGeneratedImageSrc ? <img src={secondaryGeneratedImageSrc} className="w-full h-full object-contain" alt="Generated B" /> : <div className="text-gray-500 opacity-30 uppercase font-black tracking-widest text-[10px] flex h-full items-center justify-center">Sonuç Bekleniyor</div>}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden h-full">
+              <div 
+                ref={comparisonRef} 
+                className="relative h-full w-full overflow-hidden cursor-col-resize group" 
+                style={{ transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)`, transformOrigin: 'center center' }}
+                onMouseMove={handleSliderMove} onTouchMove={handleSliderMove}
+              >
+                <img src={imageSrc || ''} className="absolute top-0 left-0 w-full h-full object-contain grayscale opacity-60" alt="Original" />
+                <div className="absolute top-0 left-0 h-full overflow-hidden z-10" style={{ width: '100%', clipPath: `inset(0 ${100 - sliderPos}% 0 0)` }}>
+                  <img src={(isDualMode && secondaryGeneratedImageSrc) ? secondaryGeneratedImageSrc : (generatedImageSrc || imageSrc || '')} className="absolute top-0 left-0 w-full h-full object-contain" alt="Comparison" />
+                </div>
+                <div className="absolute top-0 bottom-0 w-1 bg-white shadow-[0_0_25px_rgba(255,255,255,0.9)] z-20" style={{ left: `${sliderPos}%` }}>
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-2xl text-black text-2xl font-black">↔</div>
+                </div>
+                <div className="absolute top-6 left-6 bg-black/60 backdrop-blur-xl text-white text-[10px] px-4 py-2 rounded-full font-black z-30 border border-white/10">{(isDualMode && generatedImageSrc) ? `MOTOR A` : `ORİJİNAL`}</div>
+                <div className="absolute top-6 right-6 bg-blue-600/80 backdrop-blur-xl text-white text-[10px] px-4 py-2 rounded-full font-black z-30 border border-white/10">{(isDualMode && secondaryGeneratedImageSrc) ? `MOTOR B` : `SENTEZLENEN`}</div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BoxMask() { return null; }

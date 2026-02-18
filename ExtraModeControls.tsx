@@ -68,7 +68,19 @@ export function ExtraModeControls() {
                 onClick={() => {
                   setLines([]);
                 }}>
-                <div className="text-xs">🗑️</div>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
                 Clear
               </button>
             </div>
@@ -78,7 +90,18 @@ export function ExtraModeControls() {
                 onClick={() => {
                   setDrawMode(false);
                 }}>
-                <div className="text-sm">✅</div>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
                 <div>Done</div>
               </button>
             </div>
@@ -98,7 +121,14 @@ export function ExtraModeControls() {
                 setBoundingBoxMasks([]);
                 setPoints([]);
               }}>
-              <div className="text-xs">🔴</div>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm4-4H8V8h8v8z" />
+              </svg>
               <div className="whitespace-nowrap">Stop screenshare</div>
             </button>
           ) : null}
