@@ -106,7 +106,7 @@ const GUIDE_SECTIONS = [
           <h4 className="font-bold text-purple-700 dark:text-purple-400 mb-2">Dengeleme İş Akışı:</h4>
           <ul className="list-disc list-inside space-y-1 text-gray-700 dark:text-gray-300">
             <li>Elinizdeki 1 adet nadir örneği yükleyin veya normal bir örneği kullanın.</li>
-            <li>Sektör kontrollerinden nadir durumu seçin (örn. Tarım -> Azot Eksikliği).</li>
+            <li>Sektör kontrollerinden nadir durumu seçin (örn. Tarım &rarr; Azot Eksikliği).</li>
             <li><strong>Batch Count</strong> ayarını 8'e getirin.</li>
             <li>Tek seferde 8 farklı varyasyon üreterek veri setinizdeki azınlık sınıfı zenginleştirin.</li>
           </ul>

@@ -35,7 +35,6 @@ import {RemoteSensingControls} from './RemoteSensingControls';
 import {RedTeamControls} from './RedTeamControls';
 import {DataDreamerControls} from './DataDreamerControls';
 import {FalAIControls} from './FalAIControls';
-import {PromptSuggestions} from './PromptSuggestions';
 
 const CAMERA_ANGLES = [
   { id: 'default', label: 'Standart', icon: '📷' },
@@ -60,6 +59,7 @@ export function InputPanel() {
   const [isOpen, setIsOpen] = useAtom(IsInputPanelOpenAtom);
   const [activeSector] = useAtom(ActiveSectorAtom);
   const [model] = useAtom(SynthesisModelAtom);
+  const [minQuality, setMinQuality] = useAtom(MinQualityThresholdAtom);
   const resetState = useResetState();
 
   const [isHistoryOpen, setIsHistoryOpen] = useAtom(IsHistoryPanelOpenAtom);
@@ -151,6 +151,13 @@ export function InputPanel() {
             </div>
             <input type="range" min="1" max="8" step="1" value={batchCount} onChange={(e) => setBatchCount(parseInt(e.target.value))} className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[var(--accent-color)]" />
           </div>
+          <div className="flex flex-col gap-3 border-t border-[var(--border-color)]/50 pt-5">
+            <div className="flex justify-between items-end">
+              <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-color-secondary)]">Kalite Eşiği</span>
+              <span className="text-sm font-black text-[var(--accent-color)] font-mono">{minQuality}%</span>
+            </div>
+            <input type="range" min="0" max="100" step="5" value={minQuality} onChange={(e) => setMinQuality(parseInt(e.target.value))} className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[var(--accent-color)]" />
+          </div>
         </div>
 
         <div className="flex flex-col gap-3">
@@ -166,8 +173,7 @@ export function InputPanel() {
         </div>
 
         <div className="pt-6 border-t border-[var(--border-color)] mt-4">
-          <div className="font-black text-[10px] uppercase tracking-[0.2em] text-[var(--accent-color)] mb-4">SENTEZ KONTROLÜ</div>
-          <PromptSuggestions />
+
           <Prompt />
         </div>
       </div>

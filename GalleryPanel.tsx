@@ -16,6 +16,7 @@ import {
   CurrentQualityMetadataAtom,
   IsGalleryPanelOpenAtom,
   IsUploadedImageAtom,
+  MinQualityThresholdAtom,
 } from './atoms';
 import {getGalleryImage, getGalleryMetadata, getAllGalleryMetadataForProject, getGalleryEntry} from './db';
 import {useManageGallery, useResetState} from './hooks';
@@ -259,6 +260,7 @@ export function GalleryPanel() {
   const [isOpen, setIsOpen] = useAtom(IsGalleryPanelOpenAtom);
   const [activeProjectGalleryKeys] = useAtom(ActiveProjectGalleryImagesAtom); // Just keys from Atom
   const [activeProjectId] = useAtom(ActiveProjectIdAtom);
+  const [minQuality] = useAtom(MinQualityThresholdAtom);
   const {clearGallery, deleteGalleryItems, addGalleryItem} = useManageGallery();
   
   // Editor State setters
@@ -307,7 +309,7 @@ export function GalleryPanel() {
     if (filterBy === 'favorites') {
       result = result.filter(i => i.metadata?.userRating === 'up');
     } else if (filterBy === 'high_quality') {
-      result = result.filter(i => (i.metadata?.qualityScore || 0) >= 80);
+      result = result.filter(i => (i.metadata?.qualityScore || 0) >= minQuality);
     }
 
     // Sort
@@ -364,6 +366,87 @@ export function GalleryPanel() {
       setSelectedImageIds(new Set());
       setDetailViewId(null);
     }
+  };
+
+  const handleDatasetExport = async () => {
+    if (selectedImageIds.size === 0) return;
+    setIsExporting(true);
+    try {
+      const zip = new JSZip();
+      const imagesFolder = zip.folder('images');
+      const labelsFolder = zip.folder('labels');
+      
+      if (imagesFolder && labelsFolder) {
+        await Promise.all((Array.from(selectedImageIds) as number[]).map(async (id) => {
+          const blob = await getGalleryImage(id);
+          const meta = await getGalleryMetadata(id);
+          
+          if (blob) {
+            imagesFolder.file(`${id}.png`, blob);
+            
+            // Generate YOLO labels if ROIs exist
+            if (meta && meta.rois && meta.rois.length > 0) {
+              let labelContent = "";
+              meta.rois.forEach(roi => {
+                let x, y, w, h;
+                
+                if (roi.type === 'rectangle') {
+                  x = roi.x + roi.width / 2;
+                  y = roi.y + roi.height / 2;
+                  w = roi.width;
+                  h = roi.height;
+                } else if (roi.type === 'circle') {
+                  x = roi.x;
+                  y = roi.y;
+                  w = roi.radius * 2;
+                  h = roi.radius * 2;
+                } else if (roi.points) {
+                  // Calculate bounding box for polygon/brush
+                  const xs = roi.points.map(p => p.x);
+                  const ys = roi.points.map(p => p.y);
+                  const minX = Math.min(...xs);
+                  const maxX = Math.max(...xs);
+                  const minY = Math.min(...ys);
+                  const maxY = Math.max(...ys);
+                  w = maxX - minX;
+                  h = maxY - minY;
+                  x = minX + w / 2;
+                  y = minY + h / 2;
+                }
+                
+                if (x !== undefined && y !== undefined && w !== undefined && h !== undefined) {
+                  // Ensure values are within 0-1
+                  x = Math.max(0, Math.min(1, x));
+                  y = Math.max(0, Math.min(1, y));
+                  w = Math.max(0, Math.min(1, w));
+                  h = Math.max(0, Math.min(1, h));
+                  
+                  // Class ID 0 (default)
+                  labelContent += `0 ${x.toFixed(6)} ${y.toFixed(6)} ${w.toFixed(6)} ${h.toFixed(6)}\n`;
+                }
+              });
+              
+              if (labelContent) {
+                labelsFolder.file(`${id}.txt`, labelContent);
+              }
+            }
+          }
+        }));
+        
+        zip.file("classes.txt", "object\n");
+        zip.file("data.yaml", "train: ../train/images\nval: ../valid/images\n\nnc: 1\nnames: ['object']");
+      }
+      
+      const content = await zip.generateAsync({type: 'blob'});
+      const url = URL.createObjectURL(content);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `dataset-yolo-${new Date().toISOString().slice(0,10)}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) { console.error(e); } finally { setIsExporting(false); }
   };
 
   const handleExport = async () => {
@@ -443,7 +526,7 @@ export function GalleryPanel() {
             >
               <option value="all">👁️ Tümü</option>
               <option value="favorites">❤️ Favoriler</option>
-              <option value="high_quality">💎 Yüksek Kalite (+80)</option>
+              <option value="high_quality">💎 Yüksek Kalite (+{minQuality})</option>
             </select>
           </div>
 
@@ -466,6 +549,9 @@ export function GalleryPanel() {
             <span>{selectedImageIds.size} görsel seçildi</span>
             <div className="flex gap-4">
               <button onClick={() => setSelectedImageIds(new Set<number>(processedItems.map(i => i.id)))} className="hover:bg-white/20 px-3 py-1.5 rounded transition-colors">Tümünü Seç</button>
+              <button onClick={handleDatasetExport} disabled={isExporting} className="hover:bg-white/20 px-3 py-1.5 rounded flex items-center gap-2 transition-colors border border-white/20">
+                {isExporting ? 'Hazırlanıyor...' : '📦 Dataset (YOLO)'}
+              </button>
               <button onClick={handleExport} disabled={isExporting} className="hover:bg-white/20 px-3 py-1.5 rounded flex items-center gap-2 transition-colors">
                 {isExporting ? 'Sıkıştırılıyor...' : '📥 Toplu İndir'}
               </button>

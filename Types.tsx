@@ -24,6 +24,7 @@ export type GalleryImageMetadata = {
   improvementSuggestion?: string;
   userRating?: 'up' | 'down' | null;
   userComment?: string;
+  rois?: ROIShape[];
 };
 
 // Region of Interest Types
