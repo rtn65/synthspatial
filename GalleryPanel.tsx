@@ -21,6 +21,7 @@ import {
 import {getGalleryImage, getGalleryMetadata, getAllGalleryMetadataForProject, getGalleryEntry} from './db';
 import {useManageGallery, useResetState} from './hooks';
 import {GalleryImageMetadata} from './Types';
+import { X, ArrowLeftRight, ThumbsUp, ThumbsDown, Trash2, Edit3, Image as ImageIcon, Calendar, Star, AlertTriangle, Eye, Heart, Diamond, CheckSquare, Square, Download, Package, Trash } from 'lucide-react';
 
 // --- Types & Interfaces ---
 interface GalleryItemData {
@@ -48,7 +49,7 @@ function GalleryComparisonSlider({ original, generated }: { original: string, ge
     return (
         <div 
             ref={containerRef}
-            className="relative w-full h-full cursor-col-resize select-none overflow-hidden rounded-lg group"
+            className="relative w-full h-full cursor-col-resize select-none overflow-hidden rounded-xl group"
             onMouseMove={handleMove} onTouchMove={handleMove}
         >
             <img src={original} className="absolute inset-0 w-full h-full object-contain grayscale opacity-60" />
@@ -56,10 +57,12 @@ function GalleryComparisonSlider({ original, generated }: { original: string, ge
                 <img src={generated} className="absolute inset-0 w-full h-full object-contain" />
             </div>
              <div className="absolute top-0 bottom-0 w-0.5 bg-white shadow-[0_0_10px_rgba(0,0,0,0.5)] z-20 group-hover:bg-[var(--accent-color)] transition-colors" style={{ left: `${sliderPos}%` }}>
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-lg text-black text-xs font-black">↔</div>
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-lg text-black">
+                    <ArrowLeftRight size={14} strokeWidth={3} />
+                  </div>
             </div>
-            <div className="absolute top-4 left-4 bg-black/50 text-white text-[10px] px-2 py-1 rounded backdrop-blur-sm">Orijinal</div>
-            <div className="absolute top-4 right-4 bg-[var(--accent-color)] text-white text-[10px] px-2 py-1 rounded shadow-lg">Sonuç</div>
+            <div className="absolute top-4 left-4 bg-black/50 text-white text-[10px] px-2 py-1 rounded backdrop-blur-sm font-medium">Original</div>
+            <div className="absolute top-4 right-4 bg-[var(--accent-color)] text-white text-[10px] px-2 py-1 rounded shadow-lg font-medium">Result</div>
         </div>
     )
 }
@@ -99,84 +102,84 @@ const GalleryDetailModal: FunctionComponent<{
   if (!generatedUrl) return null;
 
   const scoreColor = (score?: number) => {
-    if (!score) return 'text-gray-400';
-    if (score >= 85) return 'text-green-500';
-    if (score >= 60) return 'text-orange-500';
-    return 'text-red-500';
+    if (!score) return 'text-[var(--text-color-secondary)]';
+    if (score >= 85) return 'text-emerald-500';
+    if (score >= 60) return 'text-amber-500';
+    return 'text-rose-500';
   };
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 md:p-8 animate-in fade-in duration-200">
-      <div className="bg-[var(--bg-color)] w-full max-w-6xl h-[90vh] rounded-3xl shadow-2xl flex flex-col md:flex-row overflow-hidden relative">
-        <button onClick={onClose} className="absolute top-4 right-4 z-30 bg-black/20 hover:bg-black/40 text-white p-2 rounded-full transition-colors">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      <div className="bg-[var(--bg-color)] w-full max-w-6xl h-[90vh] rounded-2xl shadow-2xl flex flex-col md:flex-row overflow-hidden relative border border-[var(--border-color)]">
+        <button onClick={onClose} className="absolute top-4 right-4 z-30 bg-black/20 hover:bg-black/40 text-white p-2 rounded-full transition-colors backdrop-blur-md">
+          <X size={20} />
         </button>
 
         {/* Image Area */}
-        <div className="flex-1 bg-black/5 flex items-center justify-center p-4 relative group">
+        <div className="flex-1 bg-[var(--bg-color-secondary)] flex items-center justify-center p-4 relative group">
           {originalUrl ? (
               <GalleryComparisonSlider original={originalUrl} generated={generatedUrl} />
           ) : (
-              <img src={generatedUrl} alt="Detail" className="max-w-full max-h-full object-contain shadow-lg rounded-lg" />
+              <img src={generatedUrl} alt="Detail" className="max-w-full max-h-full object-contain shadow-sm rounded-xl" />
           )}
         </div>
 
         {/* Sidebar */}
-        <div className="w-full md:w-96 bg-[var(--bg-color-secondary)] border-l border-[var(--border-color)] flex flex-col z-20 shadow-[-5px_0_15px_rgba(0,0,0,0.05)]">
+        <div className="w-full md:w-96 bg-[var(--bg-color)] border-l border-[var(--border-color)] flex flex-col z-20">
           <div className="p-6 flex-1 overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h3 className="text-2xl font-black tracking-tight">Analiz Raporu</h3>
-                <p className="text-xs text-[var(--text-color-secondary)] opacity-60 font-mono mt-1">ID: {id}</p>
+                <h3 className="text-xl font-semibold tracking-tight text-[var(--text-color-primary)]">Analysis Report</h3>
+                <p className="text-[10px] text-[var(--text-color-secondary)] font-mono mt-1">ID: {id}</p>
               </div>
-              <div className={`text-4xl font-black ${scoreColor(metadata?.qualityScore)}`}>
+              <div className={`text-3xl font-bold font-mono ${scoreColor(metadata?.qualityScore)}`}>
                 {metadata?.qualityScore || 'N/A'}
               </div>
             </div>
 
             {metadata ? (
               <div className="space-y-6">
-                <div className="bg-[var(--bg-color)] p-4 rounded-2xl border border-[var(--border-color)]">
-                  <div className="text-[10px] font-black uppercase tracking-widest text-[var(--text-color-secondary)] mb-2">Görüş</div>
-                  <p className="text-sm font-medium leading-relaxed">{metadata.qualityFeedback}</p>
+                <div className="bg-[var(--bg-color-secondary)] p-4 rounded-xl border border-[var(--border-color)] shadow-sm">
+                  <div className="micro-label mb-2">Feedback</div>
+                  <p className="text-sm text-[var(--text-color-primary)] leading-relaxed">{metadata.qualityFeedback}</p>
                 </div>
 
                 {metadata.improvementSuggestion && (
-                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-2xl border border-blue-100 dark:border-blue-800">
-                    <div className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-2">Öneri</div>
-                    <p className="text-sm text-blue-800 dark:text-blue-300 leading-relaxed">{metadata.improvementSuggestion}</p>
+                  <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800/50 shadow-sm">
+                    <div className="micro-label !text-indigo-600 dark:!text-indigo-400 mb-2">Suggestion</div>
+                    <p className="text-sm text-indigo-900 dark:text-indigo-300 leading-relaxed">{metadata.improvementSuggestion}</p>
                   </div>
                 )}
 
                 <div>
-                   <div className="text-[10px] font-black uppercase tracking-widest text-[var(--text-color-secondary)] mb-2">Kullanıcı Puanı</div>
+                   <div className="micro-label mb-2">User Rating</div>
                    <div className="flex gap-2">
                      <button 
                        onClick={() => onRate('up')}
-                       className={`flex-1 py-2 rounded-xl border font-bold text-xs transition-all ${metadata.userRating === 'up' ? 'bg-green-500 text-white border-green-500' : 'bg-[var(--bg-color)] hover:bg-gray-100 border-[var(--border-color)]'}`}
+                       className={`flex-1 py-2.5 rounded-lg border font-medium text-xs transition-all flex items-center justify-center gap-2 ${metadata.userRating === 'up' ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm' : 'bg-[var(--bg-color-secondary)] hover:bg-[var(--bg-color)] border-[var(--border-color)] text-[var(--text-color-secondary)] hover:text-[var(--text-color-primary)]'}`}
                      >
-                       👍 Beğendim
+                       <ThumbsUp size={14} /> Good
                      </button>
                      <button 
                        onClick={() => onRate('down')}
-                       className={`flex-1 py-2 rounded-xl border font-bold text-xs transition-all ${metadata.userRating === 'down' ? 'bg-red-500 text-white border-red-500' : 'bg-[var(--bg-color)] hover:bg-gray-100 border-[var(--border-color)]'}`}
+                       className={`flex-1 py-2.5 rounded-lg border font-medium text-xs transition-all flex items-center justify-center gap-2 ${metadata.userRating === 'down' ? 'bg-rose-500 text-white border-rose-500 shadow-sm' : 'bg-[var(--bg-color-secondary)] hover:bg-[var(--bg-color)] border-[var(--border-color)] text-[var(--text-color-secondary)] hover:text-[var(--text-color-primary)]'}`}
                      >
-                       👎 Kötü
+                       <ThumbsDown size={14} /> Poor
                      </button>
                    </div>
                 </div>
               </div>
             ) : (
-              <div className="text-center py-10 text-[var(--text-color-secondary)] italic">Analiz verisi bulunamadı.</div>
+              <div className="text-center py-10 text-[var(--text-color-secondary)] text-sm">No analysis data available.</div>
             )}
           </div>
 
-          <div className="p-4 border-t border-[var(--border-color)] bg-[var(--bg-color)] flex flex-col gap-2">
-            <button onClick={onUse} className="w-full py-3 bg-[var(--accent-color)] text-white font-bold rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all">
-              🎨 Editöre Aktar
+          <div className="p-4 border-t border-[var(--border-color)] bg-[var(--bg-color-secondary)] flex flex-col gap-2">
+            <button onClick={onUse} className="w-full py-2.5 bg-[var(--accent-color)] text-white font-medium rounded-lg shadow-sm hover:opacity-90 transition-all flex items-center justify-center gap-2 text-sm">
+              <Edit3 size={16} /> Send to Editor
             </button>
-            <button onClick={onDelete} className="w-full py-3 text-red-500 hover:bg-red-50 font-bold rounded-xl transition-colors">
-              🗑️ Kalıcı Olarak Sil
+            <button onClick={onDelete} className="w-full py-2.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 font-medium rounded-lg transition-colors flex items-center justify-center gap-2 text-sm">
+              <Trash2 size={16} /> Delete Permanently
             </button>
           </div>
         </div>
@@ -206,21 +209,21 @@ const GalleryThumbnail: FunctionComponent<{
   }, [item.id]);
 
   const getScoreColor = (score?: number) => {
-    if (!score) return '#9ca3af';
-    if (score >= 85) return '#22c55e';
-    if (score >= 60) return '#f97316';
-    return '#ef4444';
+    if (!score) return '#94a3b8'; // slate-400
+    if (score >= 85) return '#10b981'; // emerald-500
+    if (score >= 60) return '#f59e0b'; // amber-500
+    return '#f43f5e'; // rose-500
   };
 
   return (
     <div 
-      className={`relative aspect-square group rounded-xl overflow-hidden cursor-pointer transition-all duration-200 border-2 ${isSelected ? 'border-[var(--accent-color)] ring-2 ring-[var(--accent-color)]/30 scale-95' : 'border-transparent hover:border-gray-300'}`}
+      className={`relative aspect-square group rounded-xl overflow-hidden cursor-pointer transition-all duration-200 border-2 ${isSelected ? 'border-[var(--accent-color)] ring-2 ring-[var(--accent-color)]/20 scale-[0.98]' : 'border-transparent hover:border-[var(--border-color)]'}`}
       onClick={() => onClick(item.id)}
     >
       {imageUrl ? (
-        <img src={imageUrl} alt="Gallery Item" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+        <img src={imageUrl} alt="Gallery Item" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
       ) : (
-        <div className="w-full h-full bg-gray-100 animate-pulse" />
+        <div className="w-full h-full bg-[var(--bg-color-secondary)] animate-pulse" />
       )}
       
       {/* Overlay Gradient */}
@@ -229,14 +232,14 @@ const GalleryThumbnail: FunctionComponent<{
       {/* Selection Checkbox */}
       <button 
         onClick={(e) => { e.stopPropagation(); onToggleSelect(item.id); }}
-        className={`absolute top-2 left-2 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-[var(--accent-color)] border-[var(--accent-color)] text-white' : 'bg-black/20 border-white/50 hover:bg-black/40'}`}
+        className={`absolute top-2 left-2 w-6 h-6 rounded-md border flex items-center justify-center transition-all shadow-sm ${isSelected ? 'bg-[var(--accent-color)] border-[var(--accent-color)] text-white' : 'bg-black/20 border-white/50 text-transparent hover:bg-black/40 hover:border-white'}`}
       >
-        {isSelected && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+        <CheckSquare size={14} className={isSelected ? 'opacity-100' : 'opacity-0'} />
       </button>
 
       {/* Score Badge */}
       {item.metadata?.qualityScore && (
-        <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md text-[10px] font-black text-white shadow-sm" style={{ backgroundColor: getScoreColor(item.metadata.qualityScore) }}>
+        <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold text-white shadow-sm" style={{ backgroundColor: getScoreColor(item.metadata.qualityScore) }}>
           {item.metadata.qualityScore}
         </div>
       )}
@@ -245,7 +248,9 @@ const GalleryThumbnail: FunctionComponent<{
       <div className="absolute bottom-0 left-0 right-0 p-3 translate-y-full group-hover:translate-y-0 transition-transform">
          <div className="flex justify-between items-end">
            {item.metadata?.userRating && (
-             <span className="text-lg drop-shadow-md">{item.metadata.userRating === 'up' ? '👍' : '👎'}</span>
+             <span className="text-white drop-shadow-md">
+               {item.metadata.userRating === 'up' ? <ThumbsUp size={14} className="text-emerald-400" fill="currentColor" /> : <ThumbsDown size={14} className="text-rose-400" fill="currentColor" />}
+             </span>
            )}
            <span className="text-[10px] text-white/80 font-mono ml-auto">
              {new Date(item.id).toLocaleDateString(undefined, {month:'short', day:'numeric'})}
@@ -361,7 +366,7 @@ export function GalleryPanel() {
   };
 
   const handleDelete = async (ids: number[]) => {
-    if (confirm(`${ids.length} görseli silmek istediğinize emin misiniz?`)) {
+    if (confirm(`${ids.length} images will be permanently deleted. Are you sure?`)) {
       await deleteGalleryItems(ids);
       setSelectedImageIds(new Set());
       setDetailViewId(null);
@@ -495,39 +500,50 @@ export function GalleryPanel() {
     <>
       <div className={`gallery-panel ${isOpen ? 'open' : ''} flex flex-col`}>
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b shrink-0 bg-[var(--bg-color)] z-10">
-          <div>
-             <h2 className="text-xl font-black tracking-tight">Galeri</h2>
-             <p className="text-xs text-[var(--text-color-secondary)]">{allItems.length} Görsel</p>
+        <div className="flex items-center justify-between p-5 border-b border-[var(--border-color)] shrink-0 bg-[var(--bg-color)] z-10">
+          <div className="flex items-center gap-3">
+             <div className="p-2 bg-[var(--bg-color-secondary)] rounded-lg border border-[var(--border-color)]">
+               <ImageIcon size={20} className="text-[var(--text-color-secondary)]" />
+             </div>
+             <div>
+               <h2 className="text-lg font-semibold tracking-tight text-[var(--text-color-primary)]">Gallery</h2>
+               <p className="text-[11px] text-[var(--text-color-secondary)] font-medium">{allItems.length} Items</p>
+             </div>
           </div>
-          <button onClick={() => setIsOpen(false)} className="secondary !p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          <button onClick={() => setIsOpen(false)} className="p-2 rounded-lg hover:bg-[var(--bg-color-secondary)] text-[var(--text-color-secondary)] hover:text-[var(--text-color-primary)] transition-colors">
+            <X size={20} />
           </button>
         </div>
 
         {/* Toolbar */}
-        <div className="px-6 py-4 border-b bg-[var(--bg-color-secondary)] flex flex-wrap gap-4 items-center justify-between shrink-0">
-          <div className="flex gap-4">
-            <select 
-              value={sortBy} 
-              onChange={(e) => setSortBy(e.target.value as SortOption)}
-              className="bg-[var(--bg-color)] border border-[var(--border-color)] text-sm font-bold rounded-lg px-3 py-2 focus:outline-none focus:border-[var(--accent-color)]"
-            >
-              <option value="newest">📅 En Yeni</option>
-              <option value="oldest">📅 En Eski</option>
-              <option value="highest_score">✨ En Yüksek Puan</option>
-              <option value="lowest_score">⚠️ En Düşük Puan</option>
-            </select>
+        <div className="px-5 py-3 border-b border-[var(--border-color)] bg-[var(--bg-color-secondary)] flex flex-wrap gap-4 items-center justify-between shrink-0">
+          <div className="flex gap-3">
+            <div className="relative">
+              <select 
+                value={sortBy} 
+                onChange={(e) => setSortBy(e.target.value as SortOption)}
+                className="appearance-none bg-[var(--bg-color)] border border-[var(--border-color)] text-xs font-medium rounded-lg pl-8 pr-8 py-2 focus:outline-none focus:border-[var(--accent-color)] focus:ring-1 focus:ring-[var(--accent-color)] text-[var(--text-color-primary)]"
+              >
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="highest_score">Highest Score</option>
+                <option value="lowest_score">Lowest Score</option>
+              </select>
+              <Calendar size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-color-secondary)] pointer-events-none" />
+            </div>
             
-            <select 
-              value={filterBy} 
-              onChange={(e) => setFilterBy(e.target.value as FilterOption)}
-              className="bg-[var(--bg-color)] border border-[var(--border-color)] text-sm font-bold rounded-lg px-3 py-2 focus:outline-none focus:border-[var(--accent-color)]"
-            >
-              <option value="all">👁️ Tümü</option>
-              <option value="favorites">❤️ Favoriler</option>
-              <option value="high_quality">💎 Yüksek Kalite (+{minQuality})</option>
-            </select>
+            <div className="relative">
+              <select 
+                value={filterBy} 
+                onChange={(e) => setFilterBy(e.target.value as FilterOption)}
+                className="appearance-none bg-[var(--bg-color)] border border-[var(--border-color)] text-xs font-medium rounded-lg pl-8 pr-8 py-2 focus:outline-none focus:border-[var(--accent-color)] focus:ring-1 focus:ring-[var(--accent-color)] text-[var(--text-color-primary)]"
+              >
+                <option value="all">All Items</option>
+                <option value="favorites">Favorites</option>
+                <option value="high_quality">High Quality (+{minQuality})</option>
+              </select>
+              <Eye size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-color-secondary)] pointer-events-none" />
+            </div>
           </div>
 
           <div className="flex gap-2">
@@ -536,39 +552,42 @@ export function GalleryPanel() {
                 if (isSelectionMode) setSelectedImageIds(new Set());
                 setIsSelectionMode(!isSelectionMode);
               }}
-              className={`text-sm font-bold px-4 py-2 rounded-lg border transition-all ${isSelectionMode ? 'bg-[var(--accent-color)] text-white border-[var(--accent-color)]' : 'bg-[var(--bg-color)] border-[var(--border-color)]'}`}
+              className={`text-xs font-medium px-3 py-2 rounded-lg border transition-all flex items-center gap-2 ${isSelectionMode ? 'bg-[var(--accent-color)] text-white border-[var(--accent-color)] shadow-sm' : 'bg-[var(--bg-color)] border-[var(--border-color)] text-[var(--text-color-primary)] hover:bg-[var(--bg-color-secondary)]'}`}
             >
-              {isSelectionMode ? 'Seçimi Bitir' : 'Çoklu Seçim'}
+              {isSelectionMode ? <><X size={14} /> Cancel Selection</> : <><CheckSquare size={14} /> Select Multiple</>}
             </button>
           </div>
         </div>
 
         {/* Batch Actions Bar (Conditional) */}
         {selectedImageIds.size > 0 && (
-          <div className="bg-[var(--accent-color)] text-white px-6 py-3 text-sm font-bold flex justify-between items-center animate-in slide-in-from-bottom-2 z-20">
-            <span>{selectedImageIds.size} görsel seçildi</span>
-            <div className="flex gap-4">
-              <button onClick={() => setSelectedImageIds(new Set<number>(processedItems.map(i => i.id)))} className="hover:bg-white/20 px-3 py-1.5 rounded transition-colors">Tümünü Seç</button>
-              <button onClick={handleDatasetExport} disabled={isExporting} className="hover:bg-white/20 px-3 py-1.5 rounded flex items-center gap-2 transition-colors border border-white/20">
-                {isExporting ? 'Hazırlanıyor...' : '📦 Dataset (YOLO)'}
+          <div className="bg-[var(--accent-color)] text-white px-5 py-3 text-xs font-medium flex justify-between items-center animate-in slide-in-from-bottom-2 z-20 shadow-md">
+            <span className="flex items-center gap-2"><CheckSquare size={14} /> {selectedImageIds.size} selected</span>
+            <div className="flex gap-2">
+              <button onClick={() => setSelectedImageIds(new Set<number>(processedItems.map(i => i.id)))} className="hover:bg-white/10 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5">
+                <Square size={14} /> Select All
               </button>
-              <button onClick={handleExport} disabled={isExporting} className="hover:bg-white/20 px-3 py-1.5 rounded flex items-center gap-2 transition-colors">
-                {isExporting ? 'Sıkıştırılıyor...' : '📥 Toplu İndir'}
+              <button onClick={handleDatasetExport} disabled={isExporting} className="hover:bg-white/10 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors border border-white/20">
+                <Package size={14} /> {isExporting ? 'Preparing...' : 'Export YOLO'}
+              </button>
+              <button onClick={handleExport} disabled={isExporting} className="hover:bg-white/10 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors border border-white/20">
+                <Download size={14} /> {isExporting ? 'Zipping...' : 'Download'}
               </button>
               {/* Fix: Explicitly cast Array.from result to handle unknown type errors in handleDelete argument. */}
-              <button onClick={() => handleDelete(Array.from(selectedImageIds) as number[])} className="bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded flex items-center gap-2 transition-colors shadow-lg">
-                🗑️ Seçilenleri Sil
+              <button onClick={() => handleDelete(Array.from(selectedImageIds) as number[])} className="bg-rose-500 hover:bg-rose-600 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm ml-2">
+                <Trash2 size={14} /> Delete
               </button>
             </div>
           </div>
         )}
 
         {/* Grid Area */}
-        <div className="flex-grow overflow-y-auto p-6 bg-[var(--bg-color-secondary)]/50">
+        <div className="flex-grow overflow-y-auto p-6 bg-[var(--bg-color)]">
           {processedItems.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-[var(--text-color-secondary)] opacity-60">
-              <div className="text-6xl mb-4">🖼️</div>
-              <p className="text-lg font-bold">Görsel bulunamadı</p>
+            <div className="flex flex-col items-center justify-center h-full text-[var(--text-color-secondary)]">
+              <ImageIcon size={48} className="mb-4 opacity-20" />
+              <p className="text-sm font-medium">No images found</p>
+              <p className="text-xs opacity-70 mt-1">Generate some images to see them here.</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4 pb-20">
@@ -586,13 +605,13 @@ export function GalleryPanel() {
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 border-t bg-[var(--bg-color)] flex justify-end">
+        <div className="p-4 border-t border-[var(--border-color)] bg-[var(--bg-color-secondary)] flex justify-end">
           <button 
              onClick={() => activeProjectId && clearGallery(activeProjectId)}
              disabled={processedItems.length === 0}
-             className="px-4 py-2 text-xs font-bold text-red-500 border border-red-200 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+             className="px-4 py-2 text-xs font-medium text-rose-600 border border-rose-200 dark:border-rose-900/50 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
           >
-            Tüm Proje Galerisini Temizle
+            <Trash size={14} /> Clear Project Gallery
           </button>
         </div>
       </div>

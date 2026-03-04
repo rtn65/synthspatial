@@ -38,6 +38,7 @@ import {
   ZoomLevelAtom,
   PanOffsetAtom,
   IsMaskVisibleAtom,
+  IsMaskInvertedAtom,
 } from './atoms';
 import {useResetState, useROIDrawing, useManageGallery} from './hooks';
 import {ROIPolygon, ROIBrush, GalleryImageMetadata} from './Types';
@@ -94,6 +95,7 @@ function ROIToolbar() {
   const [rois, setRois] = useAtom(ROIAtom);
   const [selectedId, setSelectedId] = useAtom(ROISelectedIdAtom);
   const [brushSize, setBrushSize] = useAtom(BrushSizeAtom);
+  const [isMaskInverted, setIsMaskInverted] = useAtom(IsMaskInvertedAtom);
 
   const tools = [
     { id: 'select', icon: '🎯', label: 'Seç', key: 'V' },
@@ -124,6 +126,15 @@ function ROIToolbar() {
       </div>
 
       <div className="w-full h-px bg-[var(--border-color)] my-1" />
+      
+      <button 
+        className={`w-12 h-12 flex flex-col items-center justify-center rounded-xl border-2 transition-all ${isMaskInverted ? 'bg-purple-600 text-white border-purple-600' : 'border-transparent hover:bg-[var(--bg-color-secondary)] text-[var(--text-color-secondary)]'}`} 
+        onClick={() => setIsMaskInverted(!isMaskInverted)}
+        title="Maskeyi Ters Çevir"
+      >
+        <span className="text-lg">🌗</span>
+        <span className="text-[7px] font-black uppercase mt-0.5">TERS</span>
+      </button>
 
       <button 
         className="w-12 h-12 flex flex-col items-center justify-center rounded-xl hover:bg-red-50 text-red-500 transition-colors border-2 border-transparent" 
@@ -228,6 +239,7 @@ export function Content() {
   const [zoom, setZoom] = useAtom(ZoomLevelAtom);
   const [pan, setPan] = useAtom(PanOffsetAtom);
   const [isMaskVisible] = useAtom(IsMaskVisibleAtom);
+  const [isMaskInverted] = useAtom(IsMaskInvertedAtom);
   
   const [isDualMode] = useAtom(IsDualModelModeAtom);
   const [modelA] = useAtom(SynthesisModelAtom);
@@ -397,20 +409,43 @@ export function Content() {
                       
                       <div ref={drawingContainerRef} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none" style={{ width: scaledMediaDims.width, height: scaledMediaDims.height }}>
                         <svg className={`absolute top-0 left-0 w-full h-full transition-opacity duration-300 ${isMaskVisible ? 'opacity-100' : 'opacity-0'}`}>
+                          <defs>
+                            <mask id="roi-mask">
+                              <rect x="0" y="0" width="100%" height="100%" fill={isMaskInverted ? "white" : "black"} />
+                              {rois.map((shape) => {
+                                const w = scaledMediaDims.width; const h = scaledMediaDims.height;
+                                const color = isMaskInverted ? 'black' : 'white';
+                                return (
+                                  <g key={shape.id}>
+                                    {shape.type === 'brush' && <polyline points={shape.points.map(p => `${p.x * w},${p.y * h}`).join(' ')} stroke={color} strokeWidth={shape.strokeWidth * w} fill="none" strokeOpacity={1} strokeLinecap="round" strokeLinejoin="round" />}
+                                    {shape.type === 'rectangle' && <rect x={shape.x * w} y={shape.y * h} width={shape.width * w} height={shape.height * h} fill={color} />}
+                                    {shape.type === 'circle' && <circle cx={shape.x * w} cy={shape.y * h} r={shape.radius * w} fill={color} />}
+                                    {(shape.type === 'polygon' || shape.type === 'freehand') && <polyline points={shape.points.map(p => `${p.x * w},${p.y * h}`).join(' ')} fill={color} stroke="none" />}
+                                  </g>
+                                );
+                              })}
+                            </mask>
+                          </defs>
+                          
+                          {/* Mask Overlay */}
+                          <rect x="0" y="0" width="100%" height="100%" fill="rgba(255, 0, 0, 0.3)" mask="url(#roi-mask)" />
+
+                          {/* Outlines for visibility */}
                           {rois.map((shape) => {
                             const w = scaledMediaDims.width; const h = scaledMediaDims.height;
                             const isSelected = shape.id === selectedROIId;
-                            const color = isSelected ? 'var(--accent-color)' : 'white';
+                            const color = isSelected ? 'var(--accent-color)' : 'rgba(255,255,255,0.8)';
                             return (
-                              <g key={shape.id}>
-                                {shape.type === 'brush' && <polyline points={shape.points.map(p => `${p.x * w},${p.y * h}`).join(' ')} stroke={color} strokeWidth={shape.strokeWidth * w} fill="none" strokeOpacity={shape.opacity} />}
-                                {shape.type === 'rectangle' && <rect x={shape.x * w} y={shape.y * h} width={shape.width * w} height={shape.height * h} fill="rgba(255,255,255,0.1)" stroke={color} strokeWidth="2" />}
-                                {shape.type === 'circle' && <circle cx={shape.x * w} cy={shape.y * h} r={shape.radius * w} fill="rgba(255,255,255,0.1)" stroke={color} strokeWidth="2" />}
-                                {(shape.type === 'polygon' || shape.type === 'freehand') && <polyline points={shape.points.map(p => `${p.x * w},${p.y * h}`).join(' ')} fill="rgba(255,255,255,0.1)" stroke={color} strokeWidth="2" />}
+                              <g key={`outline-${shape.id}`}>
+                                {shape.type === 'brush' && <polyline points={shape.points.map(p => `${p.x * w},${p.y * h}`).join(' ')} stroke={color} strokeWidth={1} fill="none" strokeOpacity={0.8} />}
+                                {shape.type === 'rectangle' && <rect x={shape.x * w} y={shape.y * h} width={shape.width * w} height={shape.height * h} fill="none" stroke={color} strokeWidth="1" />}
+                                {shape.type === 'circle' && <circle cx={shape.x * w} cy={shape.y * h} r={shape.radius * w} fill="none" stroke={color} strokeWidth="1" />}
+                                {(shape.type === 'polygon' || shape.type === 'freehand') && <polyline points={shape.points.map(p => `${p.x * w},${p.y * h}`).join(' ')} fill="none" stroke={color} strokeWidth="1" />}
                               </g>
                             );
                           })}
-                          {roiCursorPos && roiActiveTool === 'brush' && <circle cx={roiCursorPos.x * scaledMediaDims.width} cy={roiCursorPos.y * scaledMediaDims.height} r={brushSize/2} fill="rgba(255,255,255,0.2)" stroke="white" />}
+                          
+                          {roiCursorPos && roiActiveTool === 'brush' && <circle cx={roiCursorPos.x * scaledMediaDims.width} cy={roiCursorPos.y * scaledMediaDims.height} r={brushSize/2} fill="none" stroke="white" strokeWidth="1" />}
                         </svg>
                       </div>
                     </div>

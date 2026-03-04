@@ -5,7 +5,7 @@
 */
 /* tslint:disable */
 import {useAtom, useSetAtom} from 'jotai';
-import {useRef} from 'react';
+import {useRef, useEffect} from 'react';
 import type {PointerEvent, RefObject} from 'react';
 import {
   BrushOpacityAtom,
@@ -26,6 +26,11 @@ import {
   ROIAtom,
   ROICursorPosAtom,
   ROISelectedIdAtom,
+  UserAtom,
+  ProjectsAtom,
+  ActiveProjectIdAtom,
+  ThemeAtom,
+  UserCreditsAtom,
 } from './atoms';
 import {
   addGalleryImage,
@@ -39,9 +44,64 @@ import {
   deleteHistoryImage,
   deleteHistoryResult,
 } from './db';
-// Added ROI to imports from Types to fix 'Cannot find name ROI' error.
 import {GalleryImageMetadata, HistoryItem, HistoryResult, ROIPolygon, ROIShape, ROIBrush, ROICircle, ROIRectangle, ROIFreehand, ROI} from './Types';
 import {dataURLtoBlob} from './utils';
+import {firestoreDb} from './firebase';
+import {doc, getDoc, setDoc} from 'firebase/firestore';
+
+export function useSyncSettings() {
+  const [user] = useAtom(UserAtom);
+  const [projects, setProjects] = useAtom(ProjectsAtom);
+  const [activeProjectId, setActiveProjectId] = useAtom(ActiveProjectIdAtom);
+  const [theme, setTheme] = useAtom(ThemeAtom);
+  const [credits, setCredits] = useAtom(UserCreditsAtom);
+  const isSyncing = useRef(false);
+  const isInitialLoad = useRef(true);
+
+  // Load from Firebase on login
+  useEffect(() => {
+    if (user && firestoreDb) {
+      isSyncing.current = true;
+      getDoc(doc(firestoreDb, 'users', user.uid)).then(docSnap => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data.projects) setProjects(data.projects);
+          if (data.activeProjectId) setActiveProjectId(data.activeProjectId);
+          if (data.theme) setTheme(data.theme);
+          if (data.credits !== undefined) setCredits(data.credits);
+        } else {
+          // Initialize new user with 50 credits
+          setDoc(doc(firestoreDb, 'users', user.uid), { credits: 50 }, { merge: true });
+          setCredits(50);
+        }
+        isSyncing.current = false;
+        isInitialLoad.current = false;
+      }).catch(e => {
+        console.error('Failed to load user settings', e);
+        isSyncing.current = false;
+        isInitialLoad.current = false;
+      });
+    } else {
+      isInitialLoad.current = false;
+    }
+  }, [user, setProjects, setActiveProjectId, setTheme, setCredits]);
+
+  // Save to Firebase on change
+  useEffect(() => {
+    if (user && firestoreDb && !isSyncing.current && !isInitialLoad.current) {
+      const timeoutId = setTimeout(() => {
+        setDoc(doc(firestoreDb, 'users', user.uid), {
+          projects,
+          activeProjectId,
+          theme,
+          credits,
+          lastUpdated: Date.now()
+        }, { merge: true }).catch(e => console.error('Failed to save user settings', e));
+      }, 1000); // Debounce saves
+      return () => clearTimeout(timeoutId);
+    }
+  }, [projects, activeProjectId, theme, credits, user]);
+}
 
 export function useResetState() {
   const setImageSent = useSetAtom(ImageSentAtom);

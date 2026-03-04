@@ -1,6 +1,5 @@
 
-@import url("https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap");
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 html,
 body,
@@ -15,7 +14,7 @@ body {
   font-size: 14px;
   background-color: var(--bg-color);
   color: var(--text-color-primary);
-  font-family: 'Inter', sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
 input,
@@ -46,19 +45,19 @@ textarea:focus {
 }
 
 :root {
-  --bg-color: #ffffff;
-  --bg-color-secondary: #f7f7f8;
-  --accent-color: #1a73e8;
-  --accent-color-focus: #1a73e840;
-  --border-color: #e0e0e0;
-  --text-color-primary: #202124;
-  --text-color-secondary: #5f6368;
+  --bg-color: #f8fafc; /* slate-50 */
+  --bg-color-secondary: #ffffff;
+  --accent-color: #0f172a; /* slate-900 */
+  --accent-color-focus: rgba(15, 23, 42, 0.1);
+  --border-color: #e2e8f0; /* slate-200 */
+  --text-color-primary: #0f172a; /* slate-900 */
+  --text-color-secondary: #64748b; /* slate-500 */
   --text-size-large: 18px;
   --text-size-medium: 14px;
   --text-size-small: 12px;
-  --box-radius: 8px;
+  --box-radius: 6px;
   --input-color: #ffffff;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   font-weight: 400;
   font-size: 14px;
   color: var(--text-color-primary);
@@ -66,14 +65,14 @@ textarea:focus {
 }
 
 .dark {
-  --bg-color: #121212;
-  --bg-color-secondary: #1e1e1e;
-  --accent-color: #8ab4f8;
-  --accent-color-focus: #8ab4f840;
-  --border-color: #333333;
-  --text-color-primary: #e8eaed;
-  --text-color-secondary: #9aa0a6;
-  --input-color: #242424;
+  --bg-color: #020617; /* slate-950 */
+  --bg-color-secondary: #0f172a; /* slate-900 */
+  --accent-color: #f8fafc; /* slate-50 */
+  --accent-color-focus: rgba(248, 250, 252, 0.1);
+  --border-color: #1e293b; /* slate-800 */
+  --text-color-primary: #f8fafc; /* slate-50 */
+  --text-color-secondary: #94a3b8; /* slate-400 */
+  --input-color: #0f172a;
   color: var(--text-color-primary);
   background-color: var(--bg-color);
   color-scheme: dark;
@@ -98,7 +97,7 @@ button,
   font-weight: 500;
   color: var(--text-color-primary);
   border: 1px solid var(--border-color);
-  background-color: var(--bg-color);
+  background-color: var(--bg-color-secondary);
   padding: 8px 16px;
   border-radius: var(--box-radius);
   min-height: 36px;
@@ -111,7 +110,7 @@ button,
 
 button:not(:disabled):hover,
 .button:not(:disabled):hover {
-  background-color: var(--bg-color-secondary);
+  background-color: var(--bg-color);
   border-color: var(--text-color-secondary);
 }
 
@@ -122,13 +121,10 @@ button:focus-visible {
 
 .send-button {
   background-color: var(--accent-color) !important;
-  color: white !important;
+  color: var(--bg-color) !important;
   border-color: var(--accent-color) !important;
-  font-weight: 700;
-}
-
-.dark .send-button {
-  color: #121212 !important;
+  font-weight: 600;
+  letter-spacing: 0.025em;
 }
 
 .send-button:not(:disabled):hover {
@@ -161,13 +157,9 @@ button:disabled {
   flex-direction: column;
   flex: 1;
   overflow: hidden;
-  background-color: var(--bg-color-secondary);
+  background-color: var(--bg-color);
   position: relative;
   z-index: 10;
-}
-
-.dark .content-area {
-  background-color: #0c0c0c;
 }
 
 /* Panels */
@@ -178,14 +170,14 @@ button:disabled {
   width: 400px;
   max-width: 90vw;
   height: 100dvh;
-  background-color: var(--bg-color);
+  background-color: var(--bg-color-secondary);
   border-left: 1px solid var(--border-color);
   transform: translateX(100%);
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 100;
   display: flex;
   flex-direction: column;
-  box-shadow: -10px 0 30px rgba(0,0,0,0.1);
+  box-shadow: -10px 0 30px rgba(0,0,0,0.05);
 }
 
 .gallery-panel {
@@ -193,7 +185,7 @@ button:disabled {
   inset: 0; /* Full screen */
   width: 100vw;
   height: 100dvh;
-  background-color: var(--bg-color);
+  background-color: var(--bg-color-secondary);
   transform: translateY(100%); /* Slide up from bottom */
   transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   z-index: 200; /* Higher than history and top bar */
@@ -211,19 +203,19 @@ button:disabled {
 
 /* Control Sidebar (Right Panel) */
 .input-panel-container {
-  width: 420px;
+  width: 380px;
   flex-shrink: 0;
   border-left: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  background-color: var(--bg-color);
+  background-color: var(--bg-color-secondary);
   z-index: 20;
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .input-panel-container.closed {
   transform: translateX(100%);
-  margin-right: -420px;
+  margin-right: -380px;
 }
 
 @media (max-width: 1024px) {
@@ -245,7 +237,7 @@ button:disabled {
 }
 
 .input-panel {
-  padding: 1.25rem;
+  padding: 1.5rem;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -254,8 +246,8 @@ button:disabled {
 
 /* Scrollbars */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -264,7 +256,7 @@ button:disabled {
 
 ::-webkit-scrollbar-thumb {
   background: var(--border-color);
-  border-radius: 4px;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -282,14 +274,27 @@ button:disabled {
   top: 1rem;
   left: 50%;
   transform: translateX(-50%);
-  background-color: #d32f2f;
+  background-color: #ef4444; /* red-500 */
   color: white;
   padding: 0.75rem 1.5rem;
   border-radius: var(--box-radius);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   z-index: 1000;
   display: flex;
   align-items: center;
   gap: 1rem;
-  font-weight: bold;
+  font-weight: 500;
+}
+
+/* Enterprise Typography Utility Classes */
+.font-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+.micro-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-color-secondary);
+  font-weight: 600;
 }

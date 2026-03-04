@@ -14,6 +14,7 @@ import {HistoryPanel} from './HistoryPanel';
 import {InputPanel} from './InputPanel';
 import {TopBar} from './TopBar';
 import {Tutorial} from './Tutorial';
+import {AnalyticsPanel} from './AnalyticsPanel';
 import {EngineeringGuide} from './EngineeringGuide';
 import {DetectTypes, Project, Theme} from './Types';
 import {
@@ -43,7 +44,7 @@ import {
 } from './atoms';
 import {imageOptions} from './consts';
 import {getAllGalleryImagesForProject, getHistoryImage} from './db';
-import {useResetState} from './hooks';
+import {useResetState, useSyncSettings} from './hooks';
 import {hash} from './utils';
 
 const THEME_KEY = 'theme';
@@ -64,6 +65,7 @@ const MIN_QUALITY_BASE_KEY = 'minQuality';
 const CAMERA_ANGLE_BASE_KEY = 'cameraAngle';
 
 function App() {
+  useSyncSettings();
   const [imageSrc, setImageSrc] = useAtom(ImageSrcAtom);
   const resetState = useResetState();
   const [initFinished] = useAtom(InitFinishedAtom);
@@ -262,6 +264,7 @@ function App() {
       <GalleryPanel />
       <Tutorial />
       <EngineeringGuide />
+      <AnalyticsPanel />
     </div>
   );
 }

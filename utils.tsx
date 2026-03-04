@@ -22,6 +22,62 @@ import JSZip from 'jszip';
 import {getAllHistoryResults, getHistoryImage} from './db';
 import {BoundingBox2DType, HistoryItem, HistoryResult} from './Types';
 
+import {ROIShape} from './Types';
+
+export async function createMaskFromROIs(rois: ROIShape[], width: number, height: number, inverted: boolean = false): Promise<string> {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return '';
+
+  // If inverted: Background is White (masked in), Shapes are Black (masked out)
+  // If normal: Background is Black (masked out), Shapes are White (masked in)
+  
+  const bgColor = inverted ? 'white' : 'black';
+  const shapeColor = inverted ? 'black' : 'white';
+
+  // Fill background
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, width, height);
+
+  // Draw shapes
+  ctx.fillStyle = shapeColor;
+  ctx.strokeStyle = shapeColor;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  rois.forEach(shape => {
+    if (shape.type === 'brush') {
+      if (shape.points.length < 2) return;
+      ctx.beginPath();
+      ctx.lineWidth = shape.strokeWidth * width; 
+      ctx.moveTo(shape.points[0].x * width, shape.points[0].y * height);
+      for (let i = 1; i < shape.points.length; i++) {
+        ctx.lineTo(shape.points[i].x * width, shape.points[i].y * height);
+      }
+      ctx.stroke();
+    } else if (shape.type === 'rectangle') {
+      ctx.fillRect(shape.x * width, shape.y * height, shape.width * width, shape.height * height);
+    } else if (shape.type === 'circle') {
+      ctx.beginPath();
+      ctx.arc(shape.x * width, shape.y * height, shape.radius * width, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (shape.type === 'polygon' || shape.type === 'freehand') {
+      if (shape.points.length < 2) return;
+      ctx.beginPath();
+      ctx.moveTo(shape.points[0].x * width, shape.points[0].y * height);
+      for (let i = 1; i < shape.points.length; i++) {
+        ctx.lineTo(shape.points[i].x * width, shape.points[i].y * height);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+  });
+
+  return canvas.toDataURL('image/png').split(',')[1];
+}
+
 export function getSvgPathFromStroke(stroke: number[][]) {
   if (!stroke.length) return '';
 

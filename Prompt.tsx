@@ -41,9 +41,12 @@ import {
   FalLoRAScaleAtom,
   FalNumStepsAtom,
   FalGuidanceScaleAtom,
+  IsMaskInvertedAtom,
+  UserCreditsAtom,
+  UserAtom,
 } from './atoms';
 import {useManageGallery, useManageHistory} from './hooks';
-import {createThumbnail, loadImage} from './utils';
+import {createThumbnail, loadImage, createMaskFromROIs} from './utils';
 import {BG_PRESETS} from './consts';
 
 export function Prompt() {
@@ -59,7 +62,9 @@ export function Prompt() {
   const [editPrompt, setEditPrompt] = useAtom(EditPromptAtom);
   const [currentBatchIndex, setCurrentBatchIndex] = useAtom(CurrentBatchProgressAtom);
   const [rois] = useAtom(ROIAtom);
+  const [isMaskInverted] = useAtom(IsMaskInvertedAtom);
   const [selectedPreset] = useAtom(SelectedBackgroundPresetAtom);
+  const [credits, setCredits] = useAtom(UserCreditsAtom);
   
   const [synthesisModel] = useAtom(SynthesisModelAtom);
   const [secondaryModel] = useAtom(SecondarySynthesisModelAtom);
@@ -189,9 +194,26 @@ export function Prompt() {
 
   async function generateNative(model: any, inputBase64: string, originalBase64: string, width: number, height: number, isSecondary: boolean) {
     const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+    
+    // Check for ROIs to create mask
+    let maskBase64: string | null = null;
+    if (rois.length > 0) {
+      maskBase64 = await createMaskFromROIs(rois, width, height, isMaskInverted);
+    }
+
+    const contents = { parts: [] as any[] };
+    contents.parts.push({inlineData: {data: inputBase64, mimeType: 'image/jpeg'}});
+    if (maskBase64) {
+      // Pass mask as second image for inpainting context
+      contents.parts.push({inlineData: {data: maskBase64, mimeType: 'image/png'}});
+      contents.parts.push({text: `Edit the image. Use the second image as a mask where white pixels indicate the area to modify. ${editPrompt}`});
+    } else {
+      contents.parts.push({text: editPrompt});
+    }
+
     const response = await ai.models.generateContent({
       model: model,
-      contents: { parts: [{inlineData: {data: inputBase64, mimeType: 'image/jpeg'}}, {text: editPrompt}] },
+      contents: contents,
       config: { 
         imageConfig: { aspectRatio: "1:1", ...(model.includes('pro') ? { imageSize } : {}) },
         ...(model.includes('pro') && isSearchActive ? { tools: [{ googleSearch: {} }] } : {})
@@ -219,8 +241,17 @@ export function Prompt() {
     }
   }
 
+  const [user] = useAtom(UserAtom);
+
   async function handleSend() {
     if (isLoading) return;
+    
+    const requiredCredits = isDualMode ? 2 : batchCount;
+    if (credits < requiredCredits) {
+      setError(`Yetersiz kredi. Bu işlem için ${requiredCredits} kredi gerekiyor, ancak ${credits} krediniz var.`);
+      return;
+    }
+
     setIsLoading(true); setIsStopping(false); isStoppingRef.current = false; setError(null);
     try {
       const {base64Image: originalBase64, width, height} = await captureImage();
@@ -232,12 +263,16 @@ export function Prompt() {
           generateSingle(synthesisModel, originalBase64, originalBase64, width, height, false),
           generateSingle(secondaryModel, originalBase64, originalBase64, width, height, true)
         ]);
+        setCredits(prev => prev - 2);
       } else {
+        let generatedCount = 0;
         for (let i = 0; i < batchCount; i++) {
           if (isStoppingRef.current) break;
           setCurrentBatchIndex(i + 1);
           await generateSingle(synthesisModel, originalBase64, originalBase64, width, height, false);
+          generatedCount++;
         }
+        setCredits(prev => prev - generatedCount);
       }
     } catch (e: any) { setError(e.message || 'Hata oluştu.'); }
     finally { setIsLoading(false); setCurrentBatchIndex(0); }
@@ -255,26 +290,32 @@ export function Prompt() {
   }
 
   return (
-    <div className="prompt-container">
-      <div className="prompt-input-wrapper relative">
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col bg-[var(--bg-color)] border border-[var(--border-color)] rounded-xl overflow-hidden focus-within:border-[var(--accent-color)] focus-within:ring-1 focus-within:ring-[var(--accent-color)] transition-all shadow-sm">
         <textarea 
           value={editPrompt} onChange={(e) => setEditPrompt(e.target.value)} 
-          placeholder="Görsel fikrini buraya yaz..." disabled={isLoading} 
-          className="w-full bg-transparent border-none focus:ring-0 p-4 min-h-[100px] text-sm resize-none"
+          placeholder="Enter prompt to generate or edit..." disabled={isLoading} 
+          className="w-full bg-transparent border-none focus:ring-0 p-4 min-h-[100px] text-sm resize-none text-[var(--text-color-primary)] placeholder:text-[var(--text-color-secondary)]"
         />
-        <div className="flex gap-2 p-2 border-t border-gray-100 dark:border-gray-800">
-           <span className="text-[10px] font-bold text-gray-400 uppercase">Provider:</span>
-           <span className="text-[10px] font-black text-[var(--accent-color)] uppercase">
-             {synthesisModel.split('-')[0]}
-           </span>
+        <div className="flex items-center justify-between px-4 py-2 bg-[var(--bg-color-secondary)] border-t border-[var(--border-color)]">
+           <div className="flex items-center gap-2">
+             <span className="micro-label">Provider:</span>
+             <span className="font-mono text-[10px] font-bold text-[var(--accent-color)] uppercase">
+               {synthesisModel.split('-')[0]}
+             </span>
+           </div>
+           <div className="flex items-center gap-2">
+             <span className="micro-label">Cost:</span>
+             <span className="font-mono text-[10px] font-bold text-amber-500">{isDualMode ? 2 : batchCount} 🪙</span>
+           </div>
         </div>
       </div>
       
       <div className="flex gap-2">
-        <button onClick={handleSend} disabled={isLoading} className="send-button grow h-12 shadow-lg active:scale-95 transition-transform">
-          {isLoading ? `İşleniyor...` : (isDualMode ? 'Karşılaştır' : 'Sentezle')}
+        <button onClick={handleSend} disabled={isLoading} className="send-button grow h-10 rounded-lg shadow-sm active:scale-[0.98] transition-all">
+          {isLoading ? `Processing...` : (isDualMode ? 'Compare Models' : 'Generate')}
         </button>
-        {isLoading && <button onClick={() => setIsStopping(true)} className="secondary border-red-500 text-red-500 px-4 rounded-xl">Durdur</button>}
+        {isLoading && <button onClick={() => setIsStopping(true)} className="h-10 px-4 rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 text-sm font-medium transition-colors">Stop</button>}
       </div>
     </div>
   );

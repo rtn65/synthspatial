@@ -10,6 +10,110 @@ import {useState} from 'react';
 
 const GUIDE_SECTIONS = [
   {
+    id: 'getting-started',
+    title: 'Başlangıç ve Temel Kullanım',
+    icon: '🚀',
+    color: 'blue',
+    summary: 'SynthEngine Pro temel özellikleri ve arayüzü.',
+    content: (
+      <div className="space-y-3 text-sm">
+        <p>SynthEngine Pro, gelişmiş yapay zeka modellerini kullanarak sentetik veri üretmenizi sağlayan bir platformdur.</p>
+        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800">
+          <h4 className="font-bold text-blue-700 dark:text-blue-400 mb-2">Temel İş Akışı:</h4>
+          <ol className="list-decimal list-inside space-y-1 text-gray-700 dark:text-gray-300">
+            <li>Üst menüden kullanmak istediğiniz <strong>Yapay Zeka Modelini</strong> seçin.</li>
+            <li>Sol taraftaki araç çubuğunu kullanarak görüntü üzerinde işlem yapmak istediğiniz alanı seçin (veya tüm görüntüyü kullanın).</li>
+            <li>Sağ panelden sektörünüzü ve özel ayarlarınızı yapılandırın.</li>
+            <li>Alt kısımdaki metin kutusuna ne istediğinizi yazın ve <strong>Sentezle</strong> butonuna basın.</li>
+          </ol>
+        </div>
+      </div>
+    )
+  },
+  {
+    id: 'dual-model',
+    title: 'Dual Model Mode (A/B Testi)',
+    icon: '⚖️',
+    color: 'purple',
+    summary: 'İki farklı AI modelini aynı anda karşılaştırın.',
+    content: (
+      <div className="space-y-3 text-sm">
+        <p>Farklı yapay zeka modellerinin aynı prompt'a nasıl tepki verdiğini görmek için <strong>Dual Model Mode</strong> kullanabilirsiniz.</p>
+        <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg border border-purple-100 dark:border-purple-800">
+          <h4 className="font-bold text-purple-700 dark:text-purple-400 mb-2">Nasıl Kullanılır?</h4>
+          <ul className="list-disc list-inside space-y-1 text-gray-700 dark:text-gray-300">
+            <li>Sağ paneldeki (Ayarlar) <strong>Gelişmiş AI Özellikleri</strong> bölümünü açın.</li>
+            <li><strong>Dual Model Mode (A/B Test)</strong> seçeneğini aktif edin.</li>
+            <li>Karşılaştırmak istediğiniz ikinci modeli seçin.</li>
+            <li>Sentezleme yaptığınızda ekran ikiye bölünecek ve her iki modelin sonucu yan yana gösterilecektir.</li>
+          </ul>
+        </div>
+      </div>
+    )
+  },
+  {
+    id: 'advanced-masking',
+    title: 'Gelişmiş Maskeleme (Inpainting)',
+    icon: '🖌️',
+    color: 'pink',
+    summary: 'Görüntünün sadece belirli kısımlarını değiştirin.',
+    content: (
+      <div className="space-y-3 text-sm">
+        <p>Görüntünün tamamını değiştirmek yerine sadece belirli bir nesneyi veya alanı değiştirmek için maskeleme araçlarını kullanın.</p>
+        <div className="bg-pink-50 dark:bg-pink-900/20 p-3 rounded-lg border border-pink-100 dark:border-pink-800">
+          <h4 className="font-bold text-pink-700 dark:text-pink-400 mb-2">Maskeleme İpuçları:</h4>
+          <ul className="list-disc list-inside space-y-1 text-gray-700 dark:text-gray-300">
+            <li>Sol araç çubuğundan <strong>Fırça</strong>, <strong>Dikdörtgen</strong> veya <strong>Poligon</strong> aracını seçin.</li>
+            <li>Değiştirmek istediğiniz alanı boyayın/seçin.</li>
+            <li>Arka planı değiştirmek isterseniz araç çubuğundaki <strong>Maskeyi Ters Çevir (🌗)</strong> butonuna tıklayın.</li>
+            <li>Promptunuzu yazın (örn: "Paslı hale getir" veya "Arka planı orman yap").</li>
+          </ul>
+        </div>
+      </div>
+    )
+  },
+  {
+    id: 'live-assistant',
+    title: 'Canlı Asistan (Sesli Komut)',
+    icon: '🎙️',
+    color: 'green',
+    summary: 'Yapay zeka asistanı ile konuşarak prompt oluşturun.',
+    content: (
+      <div className="space-y-3 text-sm">
+        <p>Prompt yazmak yerine, isteklerinizi doğrudan konuşarak yapay zekaya iletebilirsiniz. Asistan ayrıca ürettiğiniz görüntülerin kalitesini analiz edip size tavsiyelerde bulunur.</p>
+        <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-100 dark:border-green-800">
+          <h4 className="font-bold text-green-700 dark:text-green-400 mb-2">Özellikler:</h4>
+          <ul className="list-disc list-inside space-y-1 text-gray-700 dark:text-gray-300">
+            <li>Üst bardaki <strong>Sesli Asistan</strong> butonuna tıklayarak mikrofonunuzu açın.</li>
+            <li>Ne yapmak istediğinizi söyleyin (örn: "Görüntüyü gece vaktine çevir ve yağmur ekle").</li>
+            <li>Asistan söylediklerinizi anında prompt kutusuna yazacaktır.</li>
+            <li>Görüntü ürettikten sonra asistan size kaliteyi artırmak için <strong>Yapay Zeka Önerisi</strong> sunacaktır.</li>
+          </ul>
+        </div>
+      </div>
+    )
+  },
+  {
+    id: 'analytics',
+    title: 'Gerçek Zamanlı Analitik',
+    icon: '📊',
+    color: 'orange',
+    summary: 'Üretim kalitenizi ve trendleri takip edin.',
+    content: (
+      <div className="space-y-3 text-sm">
+        <p>Ürettiğiniz sentetik verilerin kalitesini zaman içinde izleyerek prompt mühendisliğinizin ne kadar başarılı olduğunu görebilirsiniz.</p>
+        <div className="bg-orange-50 dark:bg-orange-900/20 p-3 rounded-lg border border-orange-100 dark:border-orange-800">
+          <h4 className="font-bold text-orange-700 dark:text-orange-400 mb-2">Analitik Paneli:</h4>
+          <ul className="list-disc list-inside space-y-1 text-gray-700 dark:text-gray-300">
+            <li>Üst bardaki <strong>📊 (Grafik)</strong> ikonuna tıklayarak Analitik Dashboard'u açın.</li>
+            <li>Burada toplam üretim sayınızı, ortalama kalite puanınızı ve son üretiminizin puanını görebilirsiniz.</li>
+            <li>Grafik üzerinden zaman içindeki kalite trendinizi inceleyerek hangi prompt stratejilerinin daha iyi sonuç verdiğini analiz edin.</li>
+          </ul>
+        </div>
+      </div>
+    )
+  },
+  {
     id: 'domain-gap',
     title: 'Domain Gap & Problem Tanımı',
     icon: '🌉',
@@ -174,8 +278,8 @@ export function EngineeringGuide() {
         {/* Sidebar */}
         <div className="w-1/3 min-w-[250px] bg-gray-50 dark:bg-[#1a1a1a] border-r border-gray-200 dark:border-gray-800 flex flex-col">
           <div className="p-6 border-b border-gray-200 dark:border-gray-800">
-            <h2 className="text-xl font-black tracking-tight text-gray-900 dark:text-white">CV Mühendislik Rehberi</h2>
-            <p className="text-xs text-gray-500 mt-1 font-medium">Veri Odaklı AI Stratejileri</p>
+            <h2 className="text-xl font-black tracking-tight text-gray-900 dark:text-white">Eğitimler ve Rehberler</h2>
+            <p className="text-xs text-gray-500 mt-1 font-medium">Özellikler ve Stratejiler</p>
           </div>
           
           <div className="flex-1 overflow-y-auto p-4 space-y-2">

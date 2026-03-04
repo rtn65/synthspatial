@@ -105,4 +105,6 @@ export type HistoryItem = {
   thumbnail: number; // Key to IndexedDB blob
   resultThumbnail?: number; // Optional key for image editing result thumbnail
   isCurated?: boolean;
+  qualityScore?: number;
+  qualityFeedback?: string;
 };

@@ -14,6 +14,11 @@ import {
   ROI,
   Theme,
 } from './Types';
+import type {User} from 'firebase/auth';
+
+export const UserAtom = atom<User | null>(null);
+export const AuthLoadingAtom = atom<boolean>(true);
+export const UserCreditsAtom = atom<number>(50);
 
 export const ImageSrcAtom = atom(null as string | null);
 export const ImageSentAtom = atom(false);
@@ -154,6 +159,8 @@ export const FOVAtom = atom(75);
 export const HoveredBoxAtom = atom(null as any);
 export const LinesAtom = atom([] as any[]);
 export const IsDatasetPanelOpenAtom = atom(false);
+export const IsAnalyticsPanelOpenAtom = atom(false);
 export const ZoomLevelAtom = atom(1);
 export const PanOffsetAtom = atom({x: 0, y: 0});
 export const IsMaskVisibleAtom = atom(true);
+export const IsMaskInvertedAtom = atom(false);
